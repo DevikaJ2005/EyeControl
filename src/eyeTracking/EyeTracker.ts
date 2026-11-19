@@ -5,10 +5,11 @@
  * Strictly checks out-of-bounds predictions and calibration validation state.
  */
 
-import { GazePrediction, EyeLandmarks, HeadPose, Point2D, CentralBaselineData } from '../types/tracking';
+import { GazePrediction, EyeLandmarks, HeadPose, Point2D, CentralBaselineData, TrackingConfigMode } from '../types/tracking';
 import { FaceLandmarkerService } from '../vision/FaceLandmarker';
 import { EyeFeatureExtractor } from '../vision/EyeFeatureExtractor';
 import { HeadPoseEstimator } from '../vision/HeadPoseEstimator';
+import { AdaptiveEyeRegionTracker } from '../vision/AdaptiveEyeRegionTracker';
 import { GazeModel } from './GazeModel';
 import { GazeConfidence } from './GazeConfidence';
 import { OneEuroFilter2D } from '../interaction/OneEuroFilter';
@@ -20,6 +21,7 @@ export class EyeTracker {
   private landmarkerService: FaceLandmarkerService;
   private gazeModel: GazeModel;
   private confidenceEstimator: GazeConfidence;
+  private adaptiveTracker: AdaptiveEyeRegionTracker;
   private filter: OneEuroFilter2D;
   private listeners: Set<GazeListener> = new Set();
 
@@ -27,12 +29,21 @@ export class EyeTracker {
   private lastPrediction: GazePrediction | null = null;
   private neutralPose: HeadPose | null = null;
 
-  constructor(gazeModel: GazeModel) {
+  constructor(gazeModel: GazeModel, configMode: TrackingConfigMode = 'adaptive_dual_view') {
     this.landmarkerService = FaceLandmarkerService.getInstance();
     this.gazeModel = gazeModel;
     this.confidenceEstimator = new GazeConfidence();
+    this.adaptiveTracker = new AdaptiveEyeRegionTracker(configMode);
     // 30 Hz, minCutoff: 0.8 Hz (steady when holding gaze), beta: 0.007 (snappy saccades)
     this.filter = new OneEuroFilter2D(30, 0.8, 0.007);
+  }
+
+  public getAdaptiveTracker(): AdaptiveEyeRegionTracker {
+    return this.adaptiveTracker;
+  }
+
+  public setConfigMode(mode: TrackingConfigMode): void {
+    this.adaptiveTracker.setConfigMode(mode);
   }
 
   public subscribe(listener: GazeListener): () => void {
@@ -73,7 +84,9 @@ export class EyeTracker {
   public processFrame(video: HTMLVideoElement, timestamp: number): GazePrediction | null {
     if (!this.isRunning) return null;
 
+    const t0 = performance.now();
     const result = this.landmarkerService.detectVideoFrame(video, timestamp);
+    const faceDetectionMs = Math.round((performance.now() - t0) * 10) / 10;
     const hasFace = !!(result && result.faceLandmarks && result.faceLandmarks.length > 0);
 
     const vp = CoordinateManager.getViewport();
@@ -82,6 +95,10 @@ export class EyeTracker {
     const isCalibrationValidated = this.gazeModel.getIsTrained() && (this.gazeModel.getLastCalibrationResult()?.passed ?? false);
 
     if (!hasFace) {
+      this.adaptiveTracker.processFrame(null, null, video.videoWidth || 640, video.videoHeight || 480, {
+        faceDetectionMs,
+      });
+
       const conf = this.confidenceEstimator.evaluate(
         false,
         null,
@@ -111,11 +128,22 @@ export class EyeTracker {
     // 1. Estimate head pose
     const headPose = HeadPoseEstimator.estimate(landmarks, matrix);
 
-    // 2. Extract eye landmarks and features
+    // 2. Extract eye landmarks and features with timing
+    const tFv0 = performance.now();
     const eyeLandmarks = EyeFeatureExtractor.extractEyeLandmarks(landmarks);
     const featureVector = EyeFeatureExtractor.buildFeatureVector(landmarks, headPose, timestamp);
+    const featureExtractionMs = Math.round((performance.now() - tFv0) * 10) / 10;
 
-    // 3. Model inference in normalized coordinates
+    // 3. Update Adaptive Eye-Region Tracker (dual-view pipeline)
+    const adaptiveState = this.adaptiveTracker.processFrame(
+      landmarks,
+      headPose,
+      video.videoWidth || 640,
+      video.videoHeight || 480,
+      { faceDetectionMs, featureExtractionMs }
+    );
+
+    // 4. Model inference in normalized coordinates
     let rawX = defaultCenter.x;
     let rawY = defaultCenter.y;
     let normPos: Point2D | null = null;
@@ -127,7 +155,7 @@ export class EyeTracker {
       rawY = pred.pixel.y;
     }
 
-    // 4. Evaluate confidence with out-of-bounds rejection and validation check
+    // 5. Evaluate confidence with out-of-bounds rejection and validation check
     const confidence = this.confidenceEstimator.evaluate(
       true,
       eyeLandmarks,
@@ -136,6 +164,16 @@ export class EyeTracker {
       this.neutralPose,
       isCalibrationValidated
     );
+
+    // In Adaptive Dual-View mode, enforce strict eye ROI reliability:
+    // Suspend selection and mark unreliable if eye regions are lost or unstable
+    if (this.adaptiveTracker.getConfigMode() === 'adaptive_dual_view') {
+      if (!adaptiveState.isDualEyeReliable) {
+        confidence.isReliable = false;
+        confidence.systemStatus = 'eyes_not_detected';
+        confidence.reason = adaptiveState.repositionInstruction || 'Eye region lost or obscured';
+      }
+    }
 
     // 5. Apply OneEuroFilter only when tracking is reliable and within bounds
     let filteredX = rawX;

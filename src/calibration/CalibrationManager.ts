@@ -154,16 +154,23 @@ export class CalibrationManager {
   /**
    * Process a camera feature vector during active calibration or validation
    */
-  public processFeatureVector(features: EyeFeatureVector, screenWidth: number, screenHeight: number): void {
+  public processFeatureVector(
+    features: EyeFeatureVector,
+    screenWidth: number,
+    screenHeight: number,
+    isEyeRegionStable: boolean = true
+  ): void {
     if (this.isPaused) return;
 
     this.screenWidth = screenWidth;
     this.screenHeight = screenHeight;
 
     if (this.step === 'baseline') {
-      // Accumulate raw frames for central baseline estimation
-      this.baselineSamples.push(features);
-      const isDone = this.collector.addSample(features);
+      // Accumulate raw frames for central baseline estimation only when stable
+      if (isEyeRegionStable) {
+        this.baselineSamples.push(features);
+      }
+      const isDone = this.collector.addSample(features, isEyeRegionStable);
 
       if (isDone) {
         this.finishCentralBaseline();
@@ -173,7 +180,7 @@ export class CalibrationManager {
     }
 
     if (this.step === 'calibrating') {
-      const isDone = this.collector.addSample(features);
+      const isDone = this.collector.addSample(features, isEyeRegionStable);
       if (isDone) {
         // Collect samples from this target
         const samples = this.collector.getCollectedSamples();
@@ -195,7 +202,7 @@ export class CalibrationManager {
     }
 
     if (this.step === 'validating') {
-      const isDone = this.collector.addSample(features);
+      const isDone = this.collector.addSample(features, isEyeRegionStable);
       if (isDone) {
         const samples = this.collector.getCollectedSamples();
         this.allValSamples.push(...samples);

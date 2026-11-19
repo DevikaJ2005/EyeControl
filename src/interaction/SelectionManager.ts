@@ -48,6 +48,10 @@ export class SelectionManager {
     }
   }
 
+  public cancel(): void {
+    this.dwellEngine.cancel();
+  }
+
   public getRestMode(): boolean {
     return this.isRestModeActive;
   }

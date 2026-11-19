@@ -12,7 +12,8 @@ import { CalibrationPoints } from '../calibration/CalibrationPoints';
 import { CalibrationValidator } from '../calibration/CalibrationValidator';
 import { CoordinateManager } from '../calibration/CoordinateManager';
 import { GazeModel } from '../eyeTracking/GazeModel';
-import { NormalizedLandmark, CalibrationSample, EyeFeatureVector, CentralBaselineData } from '../types/tracking';
+import { AdaptiveEyeRegionTracker } from '../vision/AdaptiveEyeRegionTracker';
+import { NormalizedLandmark, CalibrationSample, EyeFeatureVector, CentralBaselineData, TrackingConfigMode } from '../types/tracking';
 
 describe('RidgeRegression Unit Tests', () => {
   it('accurately fits a known linear relationship with L2 regularization', () => {
@@ -474,5 +475,130 @@ describe('CoordinateManager & Out-of-Bounds Rejection Tests', () => {
 
     expect(pxSmall).toEqual({ x: 512, y: 300 });
     expect(pxLarge).toEqual({ x: 1280, y: 720 });
+  });
+});
+
+describe('AdaptiveEyeRegionTracker Unit Tests', () => {
+  // Helper to generate a realistic 478-landmark array
+  const createMockLandmarks = (faceWidth: number = 0.35, isTilted: boolean = false): NormalizedLandmark[] => {
+    const landmarks: NormalizedLandmark[] = Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
+
+    // Face boundary
+    const halfW = faceWidth / 2;
+    landmarks[EyeFeatureExtractor.FACE_LEFT] = { x: 0.5 - halfW, y: 0.5, z: 0 };
+    landmarks[EyeFeatureExtractor.FACE_RIGHT] = { x: 0.5 + halfW, y: 0.5, z: 0 };
+    landmarks[EyeFeatureExtractor.FACE_TOP] = { x: 0.5, y: 0.2, z: 0 };
+    landmarks[EyeFeatureExtractor.FACE_BOTTOM] = { x: 0.5, y: 0.8, z: 0 };
+    landmarks[EyeFeatureExtractor.NOSE_TIP] = { x: 0.5, y: 0.5, z: 0 };
+
+    // Left eye (camera left: x ~ 0.35 to 0.45)
+    landmarks[EyeFeatureExtractor.LEFT_OUTER_CORNER] = { x: 0.35, y: 0.4, z: 0 };
+    landmarks[EyeFeatureExtractor.LEFT_INNER_CORNER] = { x: 0.45, y: 0.4, z: 0 };
+    landmarks[EyeFeatureExtractor.LEFT_UPPER_LID] = { x: 0.40, y: 0.37, z: 0 };
+    landmarks[EyeFeatureExtractor.LEFT_LOWER_LID] = { x: 0.40, y: 0.43, z: 0 };
+    landmarks[EyeFeatureExtractor.LEFT_IRIS_CENTER] = { x: 0.40, y: 0.40, z: 0 };
+
+    // Right eye (camera right: x ~ 0.55 to 0.65)
+    landmarks[EyeFeatureExtractor.RIGHT_INNER_CORNER] = { x: 0.55, y: 0.4, z: 0 };
+    landmarks[EyeFeatureExtractor.RIGHT_OUTER_CORNER] = { x: 0.65, y: 0.4, z: 0 };
+    landmarks[EyeFeatureExtractor.RIGHT_UPPER_LID] = { x: 0.60, y: 0.37, z: 0 };
+    landmarks[EyeFeatureExtractor.RIGHT_LOWER_LID] = { x: 0.60, y: 0.43, z: 0 };
+    landmarks[EyeFeatureExtractor.RIGHT_IRIS_CENTER] = { x: 0.60, y: 0.40, z: 0 };
+
+    return landmarks;
+  };
+
+  it('extracts separate left and right eye ROIs with appropriate margins', () => {
+    const tracker = new AdaptiveEyeRegionTracker('adaptive_dual_view');
+    const landmarks = createMockLandmarks(0.35);
+
+    const state = tracker.processFrame(landmarks, { yaw: 0, pitch: 0, roll: 0, translation: { x: 0, y: 0, z: 0 } }, 640, 480);
+
+    expect(state.leftEyeROI).not.toBeNull();
+    expect(state.rightEyeROI).not.toBeNull();
+    expect(state.leftEyeROI!.isDetected).toBe(true);
+    expect(state.rightEyeROI!.isDetected).toBe(true);
+
+    // Left eye box surrounds left eye landmarks
+    expect(state.leftEyeROI!.box.x).toBeLessThan(0.35);
+    expect(state.leftEyeROI!.box.x + state.leftEyeROI!.box.width).toBeGreaterThan(0.45);
+
+    // Right eye box surrounds right eye landmarks
+    expect(state.rightEyeROI!.box.x).toBeLessThan(0.55);
+    expect(state.rightEyeROI!.box.x + state.rightEyeROI!.box.width).toBeGreaterThan(0.65);
+  });
+
+  it('adaptively expands ROI context margin when user moves further away from camera', () => {
+    const tracker = new AdaptiveEyeRegionTracker('adaptive_dual_view');
+
+    // 1. Standard distance (face width 0.35)
+    const normalLandmarks = createMockLandmarks(0.35);
+    const normalState = tracker.processFrame(normalLandmarks, { yaw: 0, pitch: 0, roll: 0, translation: { x: 0, y: 0, z: 0 } }, 640, 480);
+    expect(normalState.adaptiveZoomFactor).toBeCloseTo(1.0, 1);
+
+    // 2. Farther distance (face width drops to 0.20)
+    tracker.reset();
+    const farLandmarks = createMockLandmarks(0.20);
+    const farState = tracker.processFrame(farLandmarks, { yaw: 0, pitch: 0, roll: 0, translation: { x: 0, y: 0, z: 0 } }, 640, 480);
+    expect(farState.adaptiveZoomFactor).toBeGreaterThan(1.3);
+  });
+
+  it('accurately maps camera-frame coordinates to enlarged cropped canvas pixel space', () => {
+    const roiBox = { x: 0.30, y: 0.35, width: 0.20, height: 0.10 };
+    const iris = { x: 0.40, y: 0.40 }; // Exactly at center of ROI box
+
+    const canvasW = 200;
+    const canvasH = 100;
+
+    const mapped = AdaptiveEyeRegionTracker.mapToCrop(iris, roiBox, canvasW, canvasH);
+    expect(mapped.x).toBeCloseTo(100, 1); // 50% across canvas
+    expect(mapped.y).toBeCloseTo(50, 1);  // 50% across canvas
+  });
+
+  it('detects head tilt and triggers repositioning guidance', () => {
+    const tracker = new AdaptiveEyeRegionTracker('adaptive_dual_view');
+    const landmarks = createMockLandmarks(0.35);
+
+    // Severe yaw tilt
+    const tiltedPose = { yaw: 0.50, pitch: 0, roll: 0, translation: { x: 0, y: 0, z: 0 } };
+    const state = tracker.processFrame(landmarks, tiltedPose, 640, 480);
+
+    expect(state.isStabilized).toBe(false);
+    expect(state.repositionInstruction).toContain('tilted');
+    expect(tracker.isStableForCalibration()).toBe(false);
+  });
+
+  it('records performance profiling latencies and benchmark sessions', () => {
+    const tracker = new AdaptiveEyeRegionTracker('adaptive_dual_view');
+    const landmarks = createMockLandmarks(0.35);
+
+    const state = tracker.processFrame(
+      landmarks,
+      { yaw: 0, pitch: 0, roll: 0, translation: { x: 0, y: 0, z: 0 } },
+      640,
+      480,
+      { faceDetectionMs: 12.5, featureExtractionMs: 1.2 }
+    );
+
+    expect(state.telemetry.faceDetectionMs).toBe(12.5);
+    expect(state.telemetry.featureExtractionMs).toBe(1.2);
+    expect(state.telemetry.totalInferenceMs).toBeGreaterThanOrEqual(13.7);
+
+    // Record a benchmark session
+    tracker.recordBenchmarkSession({
+      sessionId: 'sess-test',
+      configMode: 'adaptive_dual_view',
+      timestamp: Date.now(),
+      meanErrorPx: 42.5,
+      medianErrorPx: 38.0,
+      selectionAccuracy: 95.0,
+      fps: 30,
+      trackingAvailability: 99.0,
+      totalInferenceMs: 14.2,
+    });
+
+    const sessions = tracker.getBenchmarkSessions();
+    expect(sessions.length).toBe(1);
+    expect(sessions[0].configMode).toBe('adaptive_dual_view');
   });
 });

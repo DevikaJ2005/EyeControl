@@ -24,6 +24,8 @@ import {
   InputMode,
   UserAccessibilitySettings,
   CalibrationResult,
+  AdaptiveEyeTrackingState,
+  TrackingConfigMode,
 } from './types/tracking';
 
 // UI Components & Pages
@@ -69,6 +71,26 @@ export const App: React.FC = () => {
   const [calibrationResult, setCalibrationResult] = useState<CalibrationResult | null>(null);
   const [overlayData, setOverlayData] = useState<EyeDiagnosticData | null>(null);
 
+  const [adaptiveState, setAdaptiveState] = useState<AdaptiveEyeTrackingState>({
+    configMode: 'adaptive_dual_view',
+    leftEyeROI: null,
+    rightEyeROI: null,
+    isDualEyeReliable: false,
+    isStabilized: false,
+    faceScale: 0.35,
+    adaptiveZoomFactor: 1.0,
+    repositionInstruction: null,
+    telemetry: {
+      actualFps: 0,
+      faceDetectionMs: 0,
+      roiExtractionMs: 0,
+      featureExtractionMs: 0,
+      totalInferenceMs: 0,
+      trackingLossCount: 0,
+      trackingAvailability: 0,
+    },
+  });
+
   // Engine Singletons & Managers
   const cameraManagerRef = useRef<CameraManager | null>(null);
   const gazeModelRef = useRef<GazeModel | null>(null);
@@ -110,7 +132,10 @@ export const App: React.FC = () => {
             calibState.step === 'calibrating' ||
             calibState.step === 'validating'
           ) {
+            const t0 = performance.now();
             const result = FaceLandmarkerService.getInstance().detectVideoFrame(video, timestamp);
+            const faceDetectionMs = Math.round((performance.now() - t0) * 10) / 10;
+
             if (result && result.faceLandmarks && result.faceLandmarks[0]) {
               const landmarks = result.faceLandmarks[0];
               const diag = EyeFeatureExtractor.getDiagnosticOverlayData(landmarks);
@@ -118,7 +143,22 @@ export const App: React.FC = () => {
 
               const matrix = result.facialTransformationMatrixes?.[0]?.data;
               const pose = HeadPoseEstimator.estimate(landmarks, matrix);
+
+              const tFv0 = performance.now();
               const fv = EyeFeatureExtractor.buildFeatureVector(landmarks, pose, timestamp);
+              const featureExtractionMs = Math.round((performance.now() - tFv0) * 10) / 10;
+
+              // Process Adaptive Dual-View Eye Region
+              const adaptiveTracker = eyeTracker.getAdaptiveTracker();
+              const adState = adaptiveTracker.processFrame(
+                landmarks,
+                pose,
+                video.videoWidth || 640,
+                video.videoHeight || 480,
+                { faceDetectionMs, featureExtractionMs }
+              );
+              setAdaptiveState(adState);
+              const isStable = adaptiveTracker.isStableForCalibration();
 
               cameraManager.updateVisionDiagnostics(
                 true,
@@ -129,10 +169,12 @@ export const App: React.FC = () => {
               );
 
               if (fv) {
-                calibrationManager.processFeatureVector(fv, window.innerWidth, window.innerHeight);
+                calibrationManager.processFeatureVector(fv, window.innerWidth, window.innerHeight, isStable);
               }
             } else {
               setOverlayData(null);
+              eyeTracker.getAdaptiveTracker().processFrame(null, null, video.videoWidth || 640, video.videoHeight || 480);
+              setAdaptiveState(eyeTracker.getAdaptiveTracker().getState());
               cameraManager.updateVisionDiagnostics(false, false, lighting, undefined, 'face_not_detected');
             }
           } else {
@@ -140,6 +182,9 @@ export const App: React.FC = () => {
             const pred = eyeTracker.processFrame(video, timestamp);
             if (pred) {
               setCurrentPrediction(pred);
+              const adState = eyeTracker.getAdaptiveTracker().getState();
+              setAdaptiveState(adState);
+
               cameraManager.updateVisionDiagnostics(
                 !pred.confidence.isFaceLost,
                 !pred.confidence.isBlinking,
@@ -147,11 +192,16 @@ export const App: React.FC = () => {
                 undefined,
                 pred.confidence.systemStatus
               );
-              // Update selection engine with gaze point
-              selectionManager.update(
-                { x: pred.filteredX, y: pred.filteredY },
-                pred.confidence
-              );
+
+              // Update selection engine only when gaze is reliable; otherwise pause/cancel
+              if (pred.confidence.isReliable) {
+                selectionManager.update(
+                  { x: pred.filteredX, y: pred.filteredY },
+                  pred.confidence
+                );
+              } else {
+                selectionManager.cancel();
+              }
             }
           }
         } else {
@@ -315,6 +365,7 @@ export const App: React.FC = () => {
             persistentVideoElement={hiddenVideoRef.current}
             diagnosticInfo={diagnosticInfo}
             overlayData={overlayData}
+            adaptiveState={adaptiveState}
             selectedMode={settings.inputMode}
             onSelectMode={handleSelectMode}
             onCameraStarted={() => {
@@ -340,6 +391,11 @@ export const App: React.FC = () => {
             videoElement={cameraManagerRef.current?.getVideoElement() ?? null}
             diagnosticInfo={diagnosticInfo}
             overlayData={overlayData}
+            adaptiveState={adaptiveState}
+            onToggleConfigMode={(m) => {
+              eyeTrackerRef.current?.setConfigMode(m);
+              setAdaptiveState((prev) => ({ ...prev, configMode: m }));
+            }}
             onCalibrationComplete={handleCalibrationComplete}
             onNavigateHome={() => setCurrentPage('home')}
           />

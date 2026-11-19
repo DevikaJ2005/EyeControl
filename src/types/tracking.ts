@@ -17,6 +17,8 @@ export interface Point3D {
 
 export type InputMode = 'eye' | 'head';
 
+export type TrackingConfigMode = 'standard' | 'adaptive_dual_view';
+
 export type TrackingSystemStatus =
   | 'camera_unavailable'
   | 'face_not_detected'
@@ -33,6 +35,56 @@ export interface FaceBoundingBox {
   y: number;
   width: number;
   height: number;
+}
+
+export interface EyeRegionROI {
+  box: FaceBoundingBox; // Normalized [0..1] in camera frame
+  isDetected: boolean;
+  isReliable: boolean;
+  openness: number;
+  irisCenter: Point2D; // Normalized [0..1] in camera frame
+  innerCorner: Point2D;
+  outerCorner: Point2D;
+  upperLid: Point2D;
+  lowerLid: Point2D;
+}
+
+export interface TrackingPerformanceTelemetry {
+  actualFps: number;
+  faceDetectionMs: number;
+  roiExtractionMs: number;
+  featureExtractionMs: number;
+  totalInferenceMs: number;
+  trackingLossCount: number;
+  lastLossTimestamp?: number;
+  meanPredictionErrorPx?: number;
+  medianPredictionErrorPx?: number;
+  selectionSuccessRate?: number;
+  trackingAvailability?: number; // percentage 0..100
+}
+
+export interface AdaptiveEyeTrackingState {
+  configMode: TrackingConfigMode;
+  leftEyeROI: EyeRegionROI | null;
+  rightEyeROI: EyeRegionROI | null;
+  isDualEyeReliable: boolean;
+  isStabilized: boolean;
+  faceScale: number; // e.g. face width relative to frame width
+  adaptiveZoomFactor: number; // 1.0 (standard) to 1.6+ (adaptive distance boost)
+  repositionInstruction: string | null;
+  telemetry: TrackingPerformanceTelemetry;
+}
+
+export interface BenchmarkComparisonSession {
+  sessionId: string;
+  configMode: TrackingConfigMode;
+  timestamp: number;
+  meanErrorPx: number;
+  medianErrorPx: number;
+  selectionAccuracy: number;
+  fps: number;
+  trackingAvailability: number;
+  totalInferenceMs: number;
 }
 
 export interface CentralBaselineData {
@@ -235,6 +287,7 @@ export type DwellState = 'idle' | 'hovering' | 'dwelling' | 'selected' | 'rearmi
 
 export interface UserAccessibilitySettings {
   inputMode: InputMode;
+  trackingConfig?: TrackingConfigMode;
   dwellDurationMs: number;
   headSensitivity: number;
   textSize: 'normal' | 'large' | 'extra-large';

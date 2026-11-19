@@ -6,7 +6,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { CameraManager } from '../camera/CameraManager';
-import { CameraDiagnosticInfo, InputMode } from '../types/tracking';
+import { CameraDiagnosticInfo, InputMode, AdaptiveEyeTrackingState } from '../types/tracking';
 import { EyeDiagnosticData } from '../vision/EyeFeatureExtractor';
 import { DwellButton } from '../components/DwellButton';
 import { CameraPreviewOverlay } from '../components/CameraPreviewOverlay';
@@ -17,6 +17,7 @@ interface SetupPageProps {
   persistentVideoElement: HTMLVideoElement | null;
   diagnosticInfo: CameraDiagnosticInfo;
   overlayData: EyeDiagnosticData | null;
+  adaptiveState?: AdaptiveEyeTrackingState | null;
   selectedMode: InputMode;
   onSelectMode: (mode: InputMode) => void;
   onCameraStarted: () => void;
@@ -29,6 +30,7 @@ export const SetupPage: React.FC<SetupPageProps> = ({
   persistentVideoElement,
   diagnosticInfo,
   overlayData,
+  adaptiveState,
   selectedMode,
   onSelectMode,
   onCameraStarted,
@@ -141,6 +143,7 @@ export const SetupPage: React.FC<SetupPageProps> = ({
                 videoElement={cameraManager.getVideoElement()}
                 diagnosticInfo={diagnosticInfo}
                 overlayData={overlayData}
+                adaptiveState={adaptiveState}
                 mode="full"
               />
             ) : (

@@ -6,15 +6,17 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { CameraDiagnosticInfo, Point2D } from '../types/tracking';
+import { CameraDiagnosticInfo, Point2D, AdaptiveEyeTrackingState } from '../types/tracking';
 import { EyeDiagnosticData } from '../vision/EyeFeatureExtractor';
+import { AdaptiveEyeRegionTracker } from '../vision/AdaptiveEyeRegionTracker';
 import { CoordinateManager } from '../calibration/CoordinateManager';
-import { Camera, Eye, FlipHorizontal, EyeOff, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
+import { Camera, Eye, FlipHorizontal, EyeOff, ChevronDown, ChevronUp, AlertCircle, Maximize2 } from 'lucide-react';
 
 interface CameraPreviewOverlayProps {
   videoElement: HTMLVideoElement | null;
   diagnosticInfo: CameraDiagnosticInfo;
   overlayData: EyeDiagnosticData | null;
+  adaptiveState?: AdaptiveEyeTrackingState | null;
   mode?: 'full' | 'thumbnail' | 'calibration';
   showFixationWarning?: boolean;
 }
@@ -23,13 +25,16 @@ export const CameraPreviewOverlay: React.FC<CameraPreviewOverlayProps> = ({
   videoElement,
   diagnosticInfo,
   overlayData,
+  adaptiveState,
   mode = 'thumbnail',
   showFixationWarning = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const leftEyeCanvasRef = useRef<HTMLCanvasElement>(null);
+  const rightEyeCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isMirrored, setIsMirrored] = useState(true);
   const [isCollapsed, setIsCollapsed] = useState(mode === 'calibration');
-  const [showEyeCrops, setShowEyeCrops] = useState(false);
+  const [showEyeCrops, setShowEyeCrops] = useState(mode === 'full');
 
   // Sync mode changes
   useEffect(() => {
@@ -120,6 +125,39 @@ export const CameraPreviewOverlay: React.FC<CameraPreviewOverlayProps> = ({
     };
   }, [videoElement, overlayData, diagnosticInfo.faceDetected, isMirrored, isCollapsed]);
 
+  // Render enlarged eye crops when enabled
+  useEffect(() => {
+    if (isCollapsed || !showEyeCrops || !videoElement || !adaptiveState) return;
+
+    let animId: number;
+    const renderCrops = () => {
+      if (
+        leftEyeCanvasRef.current &&
+        rightEyeCanvasRef.current &&
+        videoElement.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+      ) {
+        AdaptiveEyeRegionTracker.renderEyeCropToCanvas(
+          leftEyeCanvasRef.current,
+          videoElement,
+          adaptiveState.leftEyeROI,
+          true,
+          isMirrored
+        );
+        AdaptiveEyeRegionTracker.renderEyeCropToCanvas(
+          rightEyeCanvasRef.current,
+          videoElement,
+          adaptiveState.rightEyeROI,
+          false,
+          isMirrored
+        );
+      }
+      animId = requestAnimationFrame(renderCrops);
+    };
+
+    animId = requestAnimationFrame(renderCrops);
+    return () => cancelAnimationFrame(animId);
+  }, [videoElement, adaptiveState, isMirrored, isCollapsed, showEyeCrops]);
+
   const canvasWidth = mode === 'full' ? 440 : 220;
   const canvasHeight = mode === 'full' ? 330 : 165;
 
@@ -175,6 +213,24 @@ export const CameraPreviewOverlay: React.FC<CameraPreviewOverlayProps> = ({
           >
             <FlipHorizontal size={16} />
           </button>
+
+          {adaptiveState && (
+            <button
+              type="button"
+              onClick={() => setShowEyeCrops(!showEyeCrops)}
+              title={showEyeCrops ? 'Hide enlarged eye crops' : 'Show enlarged eye crops'}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: showEyeCrops ? 'var(--primary)' : 'var(--text-secondary)',
+                padding: '2px',
+                display: 'flex',
+              }}
+            >
+              <Maximize2 size={16} />
+            </button>
+          )}
 
           <button
             type="button"
@@ -249,6 +305,35 @@ export const CameraPreviewOverlay: React.FC<CameraPreviewOverlayProps> = ({
             >
               <AlertCircle size={14} />
               <span>Look at the target on screen, not at camera!</span>
+            </div>
+          )}
+
+          {/* Enlarged Eye Crops (Adaptive Dual-View) */}
+          {showEyeCrops && adaptiveState && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '2px' }}>
+              <div style={{ backgroundColor: '#1E2A25', borderRadius: '4px', overflow: 'hidden' }}>
+                <div style={{ padding: '2px 4px', fontSize: '0.65rem', color: '#DCE7DE', fontWeight: 600 }}>
+                  L-Eye ({Math.round((adaptiveState.leftEyeROI?.openness ?? 0) * 100)}%)
+                </div>
+                <canvas
+                  ref={leftEyeCanvasRef}
+                  width={canvasWidth / 2}
+                  height={canvasHeight / 2}
+                  style={{ width: '100%', height: '70px', display: 'block' }}
+                />
+              </div>
+
+              <div style={{ backgroundColor: '#1E2A25', borderRadius: '4px', overflow: 'hidden' }}>
+                <div style={{ padding: '2px 4px', fontSize: '0.65rem', color: '#DCE7DE', fontWeight: 600 }}>
+                  R-Eye ({Math.round((adaptiveState.rightEyeROI?.openness ?? 0) * 100)}%)
+                </div>
+                <canvas
+                  ref={rightEyeCanvasRef}
+                  width={canvasWidth / 2}
+                  height={canvasHeight / 2}
+                  style={{ width: '100%', height: '70px', display: 'block' }}
+                />
+              </div>
             </div>
           )}
 

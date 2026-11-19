@@ -9,10 +9,19 @@
 import React, { useEffect, useState } from 'react';
 import { CalibrationManager, CalibrationState } from '../calibration/CalibrationManager';
 import { HeadTracker } from '../headTracking/HeadTracker';
-import { CalibrationResult, HeadNeutralPose, InputMode, CameraDiagnosticInfo } from '../types/tracking';
+import {
+  CalibrationResult,
+  HeadNeutralPose,
+  InputMode,
+  CameraDiagnosticInfo,
+  AdaptiveEyeTrackingState,
+  TrackingConfigMode,
+  BenchmarkComparisonSession,
+} from '../types/tracking';
 import { EyeDiagnosticData } from '../vision/EyeFeatureExtractor';
 import { DwellButton } from '../components/DwellButton';
 import { CameraPreviewOverlay } from '../components/CameraPreviewOverlay';
+import { DualEyeRegionPreview } from '../components/DualEyeRegionPreview';
 import { CalibrationStorage } from '../storage/CalibrationStorage';
 import {
   RefreshCw,
@@ -27,6 +36,8 @@ import {
   SkipForward,
   Download,
   Target,
+  Sliders,
+  BarChart2,
 } from 'lucide-react';
 
 interface CalibrationPageProps {
@@ -36,6 +47,8 @@ interface CalibrationPageProps {
   videoElement: HTMLVideoElement | null;
   diagnosticInfo: CameraDiagnosticInfo;
   overlayData: EyeDiagnosticData | null;
+  adaptiveState?: AdaptiveEyeTrackingState | null;
+  onToggleConfigMode?: (mode: TrackingConfigMode) => void;
   onCalibrationComplete: () => void;
   onNavigateHome: () => void;
 }
@@ -47,6 +60,8 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({
   videoElement,
   diagnosticInfo,
   overlayData,
+  adaptiveState,
+  onToggleConfigMode,
   onCalibrationComplete,
   onNavigateHome,
 }) => {
@@ -384,6 +399,7 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({
           videoElement={videoElement}
           diagnosticInfo={diagnosticInfo}
           overlayData={overlayData}
+          adaptiveState={adaptiveState}
           mode="calibration"
           showFixationWarning
         />
@@ -415,19 +431,20 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({
       </div>
 
       {mode === 'eye' ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Main Calibration Card */}
-          <div
-            style={{
-              backgroundColor: 'var(--surface)',
-              borderRadius: 'var(--radius-lg)',
-              border: '2px solid var(--border)',
-              padding: '32px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '24px',
-            }}
-          >
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
+          {/* Main Calibration & Benchmarking Column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div
+              style={{
+                backgroundColor: 'var(--surface)',
+                borderRadius: 'var(--radius-lg)',
+                border: '2px solid var(--border)',
+                padding: '32px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '24px',
+              }}
+            >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <div
@@ -618,7 +635,123 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({
               )}
             </div>
           </div>
+
+          {/* Configuration Comparison & Validation Benchmarking Card */}
+          <div
+            style={{
+              backgroundColor: 'var(--surface)',
+              borderRadius: 'var(--radius-lg)',
+              border: '2px solid var(--border)',
+              padding: '24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <BarChart2 size={20} color="#42685A" />
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Tracking Configuration Benchmark & Latency Profiling
+                </h3>
+              </div>
+
+              {onToggleConfigMode && adaptiveState && (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => onToggleConfigMode('standard')}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border)',
+                      backgroundColor: adaptiveState.configMode === 'standard' ? 'var(--primary)' : 'var(--surface)',
+                      color: adaptiveState.configMode === 'standard' ? '#FFFFFF' : 'var(--text-primary)',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Config A: Standard
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onToggleConfigMode('adaptive_dual_view')}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border)',
+                      backgroundColor: adaptiveState.configMode === 'adaptive_dual_view' ? 'var(--primary)' : 'var(--surface)',
+                      color: adaptiveState.configMode === 'adaptive_dual_view' ? '#FFFFFF' : 'var(--text-primary)',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Config B: Adaptive Dual-View
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Benchmark Live Metric Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+              <div style={{ backgroundColor: 'var(--background)', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Actual Camera FPS</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--primary)' }}>
+                  {adaptiveState?.telemetry.actualFps || diagnosticInfo.actualFps || 0} FPS
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: 'var(--background)', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Face Detection</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {adaptiveState?.telemetry.faceDetectionMs || 0} ms
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: 'var(--background)', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ROI & Features</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {((adaptiveState?.telemetry.roiExtractionMs || 0) + (adaptiveState?.telemetry.featureExtractionMs || 0)).toFixed(1)} ms
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: 'var(--background)', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Total Latency</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {adaptiveState?.telemetry.totalInferenceMs || 0} ms
+                </div>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              Dual-view adaptive tracking maintains the full-frame 640×480 face matrix while extracting high-precision smoothed eye ROIs with adaptive zoom ({adaptiveState?.adaptiveZoomFactor.toFixed(1)}x) for steady saccade tracking without jitter.
+            </div>
+          </div>
         </div>
+
+        {/* Right Sidebar: Dual-View Adaptive Eye Zoom & Camera Positioning */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {adaptiveState && (
+            <DualEyeRegionPreview
+              videoElement={videoElement}
+              diagnosticInfo={diagnosticInfo}
+              adaptiveState={adaptiveState}
+              onToggleConfigMode={onToggleConfigMode}
+            />
+          )}
+
+          <CameraPreviewOverlay
+            videoElement={videoElement}
+            diagnosticInfo={diagnosticInfo}
+            overlayData={overlayData}
+            adaptiveState={adaptiveState}
+            mode="thumbnail"
+          />
+        </div>
+      </div>
       ) : (
         /* Head Mode Calibration Panel */
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '24px', alignItems: 'start' }}>

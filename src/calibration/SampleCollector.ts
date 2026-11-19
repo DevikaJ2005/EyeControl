@@ -37,8 +37,8 @@ export class SampleCollector {
    * Process a candidate feature vector for current target
    * Returns true if target sample collection is finished
    */
-  public addSample(featureVector: EyeFeatureVector): boolean {
-    if (!this.currentTarget || this.isPaused) return false;
+  public addSample(featureVector: EyeFeatureVector, isEyeRegionStable: boolean = true): boolean {
+    if (!this.currentTarget || this.isPaused || !isEyeRegionStable) return false;
 
     const now = performance.now();
     const elapsed = now - this.targetStartTime;
