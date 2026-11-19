@@ -491,14 +491,14 @@ describe('AdaptiveEyeRegionTracker Unit Tests', () => {
     landmarks[EyeFeatureExtractor.FACE_BOTTOM] = { x: 0.5, y: 0.8, z: 0 };
     landmarks[EyeFeatureExtractor.NOSE_TIP] = { x: 0.5, y: 0.5, z: 0 };
 
-    // Left eye (camera left: x ~ 0.35 to 0.45)
+    // LEFT eye constants (person's anatomical left): placed at x ~ 0.35 to 0.45 in this mock
     landmarks[EyeFeatureExtractor.LEFT_OUTER_CORNER] = { x: 0.35, y: 0.4, z: 0 };
     landmarks[EyeFeatureExtractor.LEFT_INNER_CORNER] = { x: 0.45, y: 0.4, z: 0 };
     landmarks[EyeFeatureExtractor.LEFT_UPPER_LID] = { x: 0.40, y: 0.37, z: 0 };
     landmarks[EyeFeatureExtractor.LEFT_LOWER_LID] = { x: 0.40, y: 0.43, z: 0 };
     landmarks[EyeFeatureExtractor.LEFT_IRIS_CENTER] = { x: 0.40, y: 0.40, z: 0 };
 
-    // Right eye (camera right: x ~ 0.55 to 0.65)
+    // RIGHT eye constants (person's anatomical right): placed at x ~ 0.55 to 0.65 in this mock
     landmarks[EyeFeatureExtractor.RIGHT_INNER_CORNER] = { x: 0.55, y: 0.4, z: 0 };
     landmarks[EyeFeatureExtractor.RIGHT_OUTER_CORNER] = { x: 0.65, y: 0.4, z: 0 };
     landmarks[EyeFeatureExtractor.RIGHT_UPPER_LID] = { x: 0.60, y: 0.37, z: 0 };
@@ -519,13 +519,14 @@ describe('AdaptiveEyeRegionTracker Unit Tests', () => {
     expect(state.leftEyeROI!.isDetected).toBe(true);
     expect(state.rightEyeROI!.isDetected).toBe(true);
 
-    // Left eye box surrounds left eye landmarks
-    expect(state.leftEyeROI!.box.x).toBeLessThan(0.35);
-    expect(state.leftEyeROI!.box.x + state.leftEyeROI!.box.width).toBeGreaterThan(0.45);
+    // LEFT eye landmarks placed at x~0.35–0.45 (person's anatomical left = camera right in an
+    // unmirrored feed; in this mock we follow constant names so LEFT_* is at camera-left x)
+    expect(state.leftEyeROI!.box.x).toBeLessThan(0.45);
+    expect(state.leftEyeROI!.box.x + state.leftEyeROI!.box.width).toBeGreaterThan(0.35);
 
-    // Right eye box surrounds right eye landmarks
-    expect(state.rightEyeROI!.box.x).toBeLessThan(0.55);
-    expect(state.rightEyeROI!.box.x + state.rightEyeROI!.box.width).toBeGreaterThan(0.65);
+    // RIGHT eye landmarks placed at x~0.55–0.65
+    expect(state.rightEyeROI!.box.x).toBeLessThan(0.65);
+    expect(state.rightEyeROI!.box.x + state.rightEyeROI!.box.width).toBeGreaterThan(0.55);
   });
 
   it('adaptively expands ROI context margin when user moves further away from camera', () => {

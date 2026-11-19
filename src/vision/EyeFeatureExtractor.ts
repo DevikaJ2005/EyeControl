@@ -18,19 +18,23 @@ export interface EyeDiagnosticData {
 
 export class EyeFeatureExtractor {
   // Landmark indices for MediaPipe Face Mesh (468+ mesh with irises)
-  // Left eye (subject's right eye, viewer's left in mirrored or camera view)
-  public static readonly LEFT_IRIS_CENTER = 468;
-  public static readonly LEFT_OUTER_CORNER = 33;
-  public static readonly LEFT_INNER_CORNER = 133;
-  public static readonly LEFT_UPPER_LID = 159;
-  public static readonly LEFT_LOWER_LID = 145;
+  // All indices use the PERSON'S ANATOMICAL perspective (standard medical/accessibility convention).
+  //
+  // Person's RIGHT eye — appears on the LEFT side of an unmirrored camera frame
+  //   MediaPipe iris index 468, eye corners 33/133, lids 159/145
+  public static readonly RIGHT_IRIS_CENTER = 468;
+  public static readonly RIGHT_OUTER_CORNER = 33;
+  public static readonly RIGHT_INNER_CORNER = 133;
+  public static readonly RIGHT_UPPER_LID = 159;
+  public static readonly RIGHT_LOWER_LID = 145;
 
-  // Right eye (subject's left eye, viewer's right)
-  public static readonly RIGHT_IRIS_CENTER = 473;
-  public static readonly RIGHT_INNER_CORNER = 362;
-  public static readonly RIGHT_OUTER_CORNER = 263;
-  public static readonly RIGHT_UPPER_LID = 386;
-  public static readonly RIGHT_LOWER_LID = 374;
+  // Person's LEFT eye — appears on the RIGHT side of an unmirrored camera frame
+  //   MediaPipe iris index 473, eye corners 263/362, lids 386/374
+  public static readonly LEFT_IRIS_CENTER = 473;
+  public static readonly LEFT_INNER_CORNER = 362;
+  public static readonly LEFT_OUTER_CORNER = 263;
+  public static readonly LEFT_UPPER_LID = 386;
+  public static readonly LEFT_LOWER_LID = 374;
 
   // Face boundary landmarks
   public static readonly FACE_TOP = 10;

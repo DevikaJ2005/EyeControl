@@ -142,7 +142,7 @@ export class AdaptiveEyeRegionTracker {
       this.adaptiveZoomFactor = 1.0;
     }
 
-    // 3. Extract Left Eye ROI (subject's right, camera left)
+    // 3. Extract LEFT Eye ROI (subject's LEFT eye, camera RIGHT side of unmirrored frame)
     const leftOuter = landmarks[EyeFeatureExtractor.LEFT_OUTER_CORNER];
     const leftInner = landmarks[EyeFeatureExtractor.LEFT_INNER_CORNER];
     const leftUpper = landmarks[EyeFeatureExtractor.LEFT_UPPER_LID];
@@ -161,7 +161,7 @@ export class AdaptiveEyeRegionTracker {
       height: Math.min(1, leftRawHeight + leftMarginY * 2),
     };
 
-    // 4. Extract Right Eye ROI (subject's left, camera right)
+    // 4. Extract RIGHT Eye ROI (subject's RIGHT eye, camera LEFT side of unmirrored frame)
     const rightOuter = landmarks[EyeFeatureExtractor.RIGHT_OUTER_CORNER];
     const rightInner = landmarks[EyeFeatureExtractor.RIGHT_INNER_CORNER];
     const rightUpper = landmarks[EyeFeatureExtractor.RIGHT_UPPER_LID];
