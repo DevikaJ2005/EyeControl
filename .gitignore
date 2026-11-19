@@ -41,3 +41,5 @@ data/raw/EYEDIAP/
 !data/processed/
 !models/*.json
 !models/*.png
+*_executed.ipynb 
+scratch/ 
