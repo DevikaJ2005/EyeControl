@@ -8,42 +8,68 @@ import { CalibrationTarget } from '../types/tracking';
 
 export class CalibrationPoints {
   /**
+   * Central baseline target for neutral head and iris baseline acquisition
+   */
+  public static getCentralBaselineTarget(screenWidth: number, screenHeight: number): CalibrationTarget {
+    return {
+      id: 'baseline-center',
+      x: Math.round(0.50 * screenWidth),
+      y: Math.round(0.50 * screenHeight),
+      normalizedX: 0.50,
+      normalizedY: 0.50,
+      label: 'Central Baseline Fixation',
+      isValidationOnly: false,
+    };
+  }
+
+  /**
    * Generates standard 9-point calibration pattern (3x3 grid)
-   * With 4 separate held-out validation points.
+   * Targets kept comfortably away from extreme screen borders (15%, 50%, 85%)
+   * With 5 independent held-out validation points.
    */
   public static get9PointGrid(screenWidth: number, screenHeight: number): {
+    baselineTarget: CalibrationTarget;
     trainTargets: CalibrationTarget[];
     validationTargets: CalibrationTarget[];
   } {
-    // 3x3 grid coordinates at 10%, 50%, 90% of screen
-    const xCoords = [0.10, 0.50, 0.90];
-    const yCoords = [0.10, 0.50, 0.90];
+    const baselineTarget = this.getCentralBaselineTarget(screenWidth, screenHeight);
+
+    // 3x3 grid coordinates at 15%, 50%, 85% of screen (safe margins)
+    const xCoords = [0.15, 0.50, 0.85];
+    const yCoords = [0.15, 0.50, 0.85];
+
+    const labels = [
+      'Top-Left', 'Top-Centre', 'Top-Right',
+      'Middle-Left', 'Centre', 'Middle-Right',
+      'Bottom-Left', 'Bottom-Centre', 'Bottom-Right'
+    ];
 
     const trainTargets: CalibrationTarget[] = [];
-    let idx = 1;
+    let idx = 0;
 
     for (const y of yCoords) {
       for (const x of xCoords) {
         trainTargets.push({
-          id: `train-${idx}`,
+          id: `train-${idx + 1}`,
           x: Math.round(x * screenWidth),
           y: Math.round(y * screenHeight),
           normalizedX: x,
           normalizedY: y,
-          label: `Point ${idx}`,
+          label: labels[idx],
           isValidationOnly: false,
         });
         idx++;
       }
     }
 
-    // 4 held-out validation points in diamond layout between grid points
-    // Never used for training weights
+    // 5 independent held-out validation targets:
+    // Centre, Upper-Left, Upper-Right, Lower-Left, Lower-Right
     const valCoords = [
-      { x: 0.50, y: 0.28, id: 'val-top' },
-      { x: 0.72, y: 0.50, id: 'val-right' },
-      { x: 0.50, y: 0.72, id: 'val-bottom' },
-      { x: 0.28, y: 0.50, id: 'val-left' },
+      { x: 0.50, y: 0.50, id: 'val-center', label: 'Centre' },
+      { x: 0.32, y: 0.32, id: 'val-upper-left', label: 'Upper-Left Region' },
+      { x: 0.68, y: 0.32, id: 'val-upper-right', label: 'Upper-Right Region' },
+      { x: 0.32, y: 0.68, id: 'val-lower-left', label: 'Lower-Left Region' },
+      { x: 0.68, y: 0.68, id: 'val-lower-right', label: 'Lower-Right Region' },
     ];
 
     const validationTargets: CalibrationTarget[] = valCoords.map(c => ({
@@ -52,11 +78,11 @@ export class CalibrationPoints {
       y: Math.round(c.y * screenHeight),
       normalizedX: c.x,
       normalizedY: c.y,
-      label: `Validation ${c.id}`,
+      label: c.label,
       isValidationOnly: true,
     }));
 
-    return { trainTargets, validationTargets };
+    return { baselineTarget, trainTargets, validationTargets };
   }
 
   /**

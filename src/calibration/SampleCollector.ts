@@ -9,17 +9,28 @@ import { EyeFeatureExtractor } from '../vision/EyeFeatureExtractor';
 export class SampleCollector {
   private currentTarget: CalibrationTarget | null = null;
   private targetStartTime: number = 0;
-  private settlingDurationMs: number = 700; // Time to allow eye saccade to complete and fixate
+  private settlingDurationMs: number = 1000; // 1 second to allow eye saccade to settle on target
   private samples: CalibrationSample[] = [];
-  private requiredSamples: number = 18; // 18 high-quality frames per target (~600ms of fixation)
+  private requiredSamples: number = 20; // 20 high-quality frames (~1.5-2.0s of steady fixation)
   private prevFeatureVector: EyeFeatureVector | null = null;
+  private isPaused: boolean = false;
 
-  public startTarget(target: CalibrationTarget, requiredSamples: number = 18): void {
+  public startTarget(target: CalibrationTarget, requiredSamples: number = 20, settleMs: number = 1000): void {
     this.currentTarget = target;
     this.targetStartTime = performance.now();
     this.samples = [];
     this.requiredSamples = requiredSamples;
+    this.settlingDurationMs = settleMs;
     this.prevFeatureVector = null;
+    this.isPaused = false;
+  }
+
+  public setPaused(paused: boolean): void {
+    this.isPaused = paused;
+  }
+
+  public getIsPaused(): boolean {
+    return this.isPaused;
   }
 
   /**
@@ -27,7 +38,7 @@ export class SampleCollector {
    * Returns true if target sample collection is finished
    */
   public addSample(featureVector: EyeFeatureVector): boolean {
-    if (!this.currentTarget) return false;
+    if (!this.currentTarget || this.isPaused) return false;
 
     const now = performance.now();
     const elapsed = now - this.targetStartTime;
@@ -37,8 +48,8 @@ export class SampleCollector {
       return false;
     }
 
-    // 2. Reject blinks (either eye openness < 0.18)
-    if (featureVector.leftOpenness < 0.18 || featureVector.rightOpenness < 0.18) {
+    // 2. Reject blinks (either eye openness < 0.16)
+    if (featureVector.leftOpenness < 0.16 || featureVector.rightOpenness < 0.16) {
       return false;
     }
 
@@ -76,6 +87,38 @@ export class SampleCollector {
     });
 
     return this.samples.length >= this.requiredSamples;
+  }
+
+  /**
+   * Compute a robust trimmed mean feature vector across collected samples for this target.
+   * Removes extreme outliers in iris coordinates to yield stable target prototypes.
+   */
+  public computeTrimmedMeanSample(): CalibrationSample | null {
+    if (!this.currentTarget || this.samples.length === 0) return null;
+
+    const n = this.samples.length;
+    if (n < 3) return this.samples[0];
+
+    const numCols = this.samples[0].features.length;
+    const trimmedFeatures: number[] = [];
+
+    for (let c = 0; c < numCols; c++) {
+      const vals = this.samples.map(s => s.features[c]).sort((a, b) => a - b);
+      // Trim top and bottom 10%
+      const trimCount = Math.floor(n * 0.1);
+      const sub = vals.slice(trimCount, n - trimCount);
+      const avg = sub.reduce((sum, v) => sum + v, 0) / sub.length;
+      trimmedFeatures.push(avg);
+    }
+
+    // Median raw vector for representative metadata
+    const midIdx = Math.floor(n / 2);
+    return {
+      target: this.currentTarget,
+      features: trimmedFeatures,
+      rawFeatureVector: this.samples[midIdx].rawFeatureVector,
+      timestamp: this.samples[midIdx].timestamp,
+    };
   }
 
   public getProgress(): number {

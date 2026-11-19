@@ -17,6 +17,34 @@ export interface Point3D {
 
 export type InputMode = 'eye' | 'head';
 
+export type TrackingSystemStatus =
+  | 'camera_unavailable'
+  | 'face_not_detected'
+  | 'eyes_not_detected'
+  | 'calibration_required'
+  | 'calibrating'
+  | 'validating'
+  | 'validation_failed'
+  | 'validated_tracking'
+  | 'temporarily_unavailable';
+
+export interface FaceBoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface CentralBaselineData {
+  neutralYaw: number;
+  neutralPitch: number;
+  neutralRoll: number;
+  neutralLeftIris: Point2D;
+  neutralRightIris: Point2D;
+  neutralFaceCenter: Point2D;
+  collectedAt: number;
+}
+
 export interface CameraDiagnosticInfo {
   deviceId: string;
   label: string;
@@ -27,6 +55,8 @@ export interface CameraDiagnosticInfo {
   eyeRegionsClear: boolean;
   trackingLost: boolean;
   lightingQuality: 'good' | 'low' | 'harsh' | 'unknown';
+  faceBox?: FaceBoundingBox;
+  systemStatus?: TrackingSystemStatus;
 }
 
 export interface NormalizedLandmark {
@@ -101,6 +131,7 @@ export interface GazeConfidenceResult {
   isFaceLost: boolean;
   isPoseExtreme: boolean;
   isOutOfBounds: boolean;
+  systemStatus?: TrackingSystemStatus;
 }
 
 export interface GazePrediction {
@@ -133,11 +164,15 @@ export interface CalibrationSample {
 
 export interface ValidationMetric {
   targetId: string;
+  regionName?: string;
   targetPos: Point2D;
+  targetNormalized: Point2D;
   averagePredictedPos: Point2D;
+  averagePredictedNormalized: Point2D;
   pixelError: number;
   normalizedError: number;
   sampleCount: number;
+  isHit: boolean;
 }
 
 export interface CalibrationResult {
@@ -150,13 +185,17 @@ export interface CalibrationResult {
   r2X: number;
   r2Y: number;
   meanValidationPixelError: number;
+  medianValidationPixelError: number;
   maxValidationPixelError: number;
   overallAccuracyPercentage: number;
+  trackingLossPercentage: number;
   targetMetrics: ValidationMetric[];
   calibratedAt: string;
   screenResolution: { width: number; height: number };
   calibrationMethod: '9-point' | '17-point';
   passed: boolean;
+  modelType?: string;
+  cvScore?: number;
 }
 
 export interface HeadNeutralPose {

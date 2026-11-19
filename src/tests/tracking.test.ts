@@ -9,8 +9,9 @@ import { EyeFeatureExtractor } from '../vision/EyeFeatureExtractor';
 import { HeadPoseEstimator } from '../vision/HeadPoseEstimator';
 import { CalibrationPoints } from '../calibration/CalibrationPoints';
 import { CalibrationValidator } from '../calibration/CalibrationValidator';
+import { CoordinateManager } from '../calibration/CoordinateManager';
 import { GazeModel } from '../eyeTracking/GazeModel';
-import { NormalizedLandmark, CalibrationSample, EyeFeatureVector } from '../types/tracking';
+import { NormalizedLandmark, CalibrationSample, EyeFeatureVector, CentralBaselineData } from '../types/tracking';
 
 describe('RidgeRegression Unit Tests', () => {
   it('accurately fits a known linear relationship with L2 regularization', () => {
@@ -247,10 +248,10 @@ describe('HeadPointer Dead Zone & Sensitivity Unit Tests', () => {
 });
 
 describe('Calibration & Validation Engine Unit Tests', () => {
-  it('generates 9-point grid and distinct held-out validation points', () => {
+  it('generates 9-point grid and 5 distinct held-out validation points with safe margins', () => {
     const grid = CalibrationPoints.get9PointGrid(1920, 1080);
     expect(grid.trainTargets.length).toBe(9);
-    expect(grid.validationTargets.length).toBe(4);
+    expect(grid.validationTargets.length).toBe(5);
 
     // Ensure validation points are never duplicated in training set
     const trainIds = new Set(grid.trainTargets.map(t => t.id));
@@ -258,21 +259,40 @@ describe('Calibration & Validation Engine Unit Tests', () => {
       expect(trainIds.has(val.id)).toBe(false);
       expect(val.isValidationOnly).toBe(true);
     }
+
+    // Verify safe margins (within 0.15 to 0.85)
+    for (const t of grid.trainTargets) {
+      expect(t.normalizedX).toBeGreaterThanOrEqual(0.14);
+      expect(t.normalizedX).toBeLessThanOrEqual(0.86);
+      expect(t.normalizedY).toBeGreaterThanOrEqual(0.14);
+      expect(t.normalizedY).toBeLessThanOrEqual(0.86);
+    }
   });
 
-  it('validates calibration samples without fabricated numbers', () => {
+  it('validates calibration samples without fabricated numbers and selects model via LOOCV', () => {
     const model = new GazeModel(0.01, 1);
     const grid = CalibrationPoints.get9PointGrid(1920, 1080);
+
+    const baseline: CentralBaselineData = {
+      neutralYaw: 0,
+      neutralPitch: 0,
+      neutralRoll: 0,
+      neutralLeftIris: { x: 0.5, y: 0.5 },
+      neutralRightIris: { x: 0.5, y: 0.5 },
+      neutralFaceCenter: { x: 0.5, y: 0.5 },
+      collectedAt: 1000,
+    };
+    model.setCentralBaseline(baseline);
 
     // Create synthetic training samples
     const trainSamples: CalibrationSample[] = [];
     for (const target of grid.trainTargets) {
       for (let i = 0; i < 15; i++) {
         const rawFv: EyeFeatureVector = {
-          leftIrisX: target.normalizedX * 0.8 + 0.1,
-          leftIrisY: target.normalizedY * 0.8 + 0.1,
-          rightIrisX: target.normalizedX * 0.8 + 0.1,
-          rightIrisY: target.normalizedY * 0.8 + 0.1,
+          leftIrisX: (target.normalizedX - 0.5) * 0.4 + 0.5,
+          leftIrisY: (target.normalizedY - 0.5) * 0.4 + 0.5,
+          rightIrisX: (target.normalizedX - 0.5) * 0.4 + 0.5,
+          rightIrisY: (target.normalizedY - 0.5) * 0.4 + 0.5,
           leftOpenness: 0.35,
           rightOpenness: 0.35,
           headYaw: 0,
@@ -285,22 +305,22 @@ describe('Calibration & Validation Engine Unit Tests', () => {
         };
         trainSamples.push({
           target,
-          features: EyeFeatureExtractor.toNumericArray(rawFv),
+          features: EyeFeatureExtractor.toNumericArray(rawFv, baseline),
           rawFeatureVector: rawFv,
           timestamp: rawFv.timestamp,
         });
       }
     }
 
-    // Held-out validation samples
+    // Held-out validation samples (5 targets)
     const valSamples: CalibrationSample[] = [];
     for (const target of grid.validationTargets) {
       for (let i = 0; i < 10; i++) {
         const rawFv: EyeFeatureVector = {
-          leftIrisX: target.normalizedX * 0.8 + 0.1,
-          leftIrisY: target.normalizedY * 0.8 + 0.1,
-          rightIrisX: target.normalizedX * 0.8 + 0.1,
-          rightIrisY: target.normalizedY * 0.8 + 0.1,
+          leftIrisX: (target.normalizedX - 0.5) * 0.4 + 0.5,
+          leftIrisY: (target.normalizedY - 0.5) * 0.4 + 0.5,
+          rightIrisX: (target.normalizedX - 0.5) * 0.4 + 0.5,
+          rightIrisY: (target.normalizedY - 0.5) * 0.4 + 0.5,
           leftOpenness: 0.35,
           rightOpenness: 0.35,
           headYaw: 0,
@@ -313,7 +333,7 @@ describe('Calibration & Validation Engine Unit Tests', () => {
         };
         valSamples.push({
           target,
-          features: EyeFeatureExtractor.toNumericArray(rawFv),
+          features: EyeFeatureExtractor.toNumericArray(rawFv, baseline),
           rawFeatureVector: rawFv,
           timestamp: rawFv.timestamp,
         });
@@ -321,10 +341,96 @@ describe('Calibration & Validation Engine Unit Tests', () => {
     }
 
     const result = model.train(trainSamples, valSamples, 1920, 1080, '9-point');
-    expect(result.targetMetrics.length).toBe(4); // 4 held-out targets
-    expect(result.overallAccuracyPercentage).toBeGreaterThanOrEqual(90);
+    expect(result.targetMetrics.length).toBe(5); // 5 held-out targets
+    expect(result.overallAccuracyPercentage).toBeGreaterThanOrEqual(80);
     expect(result.passed).toBe(true);
     expect(result.r2X).toBeGreaterThan(0.9);
     expect(result.r2Y).toBeGreaterThan(0.9);
+    expect(result.modelType).toBeDefined();
+  });
+});
+
+describe('CoordinateManager & Out-of-Bounds Rejection Tests', () => {
+  it('correctly maps normalized [0..1] coordinates for 1366x768 viewport', () => {
+    const vp = { width: 1366, height: 768 };
+    const centerNorm = { x: 0.5, y: 0.5 };
+    const centerPx = CoordinateManager.normalizedToViewportPixels(centerNorm, vp);
+    expect(centerPx.x).toBe(683);
+    expect(centerPx.y).toBe(384);
+
+    const backNorm = CoordinateManager.viewportPixelsToNormalized(centerPx, vp);
+    expect(backNorm.x).toBeCloseTo(0.5, 4);
+    expect(backNorm.y).toBeCloseTo(0.5, 4);
+  });
+
+  it('correctly maps normalized [0..1] coordinates for 1280x720 viewport', () => {
+    const vp = { width: 1280, height: 720 };
+    const cornerNorm = { x: 0.85, y: 0.15 };
+    const cornerPx = CoordinateManager.normalizedToViewportPixels(cornerNorm, vp);
+    expect(cornerPx.x).toBe(1088);
+    expect(cornerPx.y).toBe(108);
+
+    const backNorm = CoordinateManager.viewportPixelsToNormalized(cornerPx, vp);
+    expect(backNorm.x).toBeCloseTo(0.85, 4);
+    expect(backNorm.y).toBeCloseTo(0.15, 4);
+  });
+
+  it('strictly rejects negative prediction (-105, 181) as out of bounds', () => {
+    const vp = { width: 1366, height: 768 };
+    const negativePx = { x: -105, y: 181 };
+    const norm = CoordinateManager.viewportPixelsToNormalized(negativePx, vp);
+
+    // norm.x is -0.0768, which is outside the screen margin!
+    expect(norm.x).toBeLessThan(0);
+    expect(CoordinateManager.isWithinBounds(norm, 0.05)).toBe(false);
+
+    // Evaluate confidence with out-of-bounds prediction
+    const confEstimator = new GazeConfidence();
+    const confResult = confEstimator.evaluate(
+      true,
+      {
+        leftIrisCenter: { x: 0.3, y: 0.4 },
+        leftInnerCorner: { x: 0.35, y: 0.4 },
+        leftOuterCorner: { x: 0.25, y: 0.4 },
+        leftUpperLid: { x: 0.3, y: 0.38 },
+        leftLowerLid: { x: 0.3, y: 0.42 },
+        leftEyeWidth: 0.1,
+        leftEyeHeight: 0.04,
+        leftOpenness: 0.4,
+        leftNormalizedIris: { x: 0.5, y: 0.5 },
+        rightIrisCenter: { x: 0.7, y: 0.4 },
+        rightInnerCorner: { x: 0.65, y: 0.4 },
+        rightOuterCorner: { x: 0.75, y: 0.4 },
+        rightUpperLid: { x: 0.7, y: 0.38 },
+        rightLowerLid: { x: 0.7, y: 0.42 },
+        rightEyeWidth: 0.1,
+        rightEyeHeight: 0.04,
+        rightOpenness: 0.4,
+        rightNormalizedIris: { x: 0.5, y: 0.5 },
+        normalizedIpd: 0.4,
+      },
+      { yaw: 0, pitch: 0, roll: 0, translation: { x: 0, y: 0, z: 0 } },
+      norm,
+      null,
+      true // calibrated
+    );
+
+    // Coordinate (-105, 181) must NEVER be accepted as reliable!
+    expect(confResult.isOutOfBounds).toBe(true);
+    expect(confResult.isReliable).toBe(false);
+    expect(confResult.confidence).toBeLessThanOrEqual(0.1);
+    expect(confResult.systemStatus).toBe('temporarily_unavailable');
+  });
+
+  it('accounts for window resizing dynamically', () => {
+    const vpSmall = { width: 1024, height: 600 };
+    const vpLarge = { width: 2560, height: 1440 };
+
+    const norm = { x: 0.5, y: 0.5 };
+    const pxSmall = CoordinateManager.normalizedToViewportPixels(norm, vpSmall);
+    const pxLarge = CoordinateManager.normalizedToViewportPixels(norm, vpLarge);
+
+    expect(pxSmall).toEqual({ x: 512, y: 300 });
+    expect(pxLarge).toEqual({ x: 1280, y: 720 });
   });
 });

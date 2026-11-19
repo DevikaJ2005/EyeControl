@@ -1,18 +1,36 @@
 /**
  * CalibrationManager
- * Manages calibration sequence, target transitions, training, and independent validation.
+ * Coordinates sequential calibration workflow:
+ * Step A (Camera Positioning) -> Step B (Central Baseline) -> Step C (9-Point Calibration)
+ * -> Step D (LOOCV Model Fitting) -> Step E (Independent 5-Point Validation).
+ * Supports manual pause, retry, and advance for caregivers / testers.
  */
 
-import { CalibrationTarget, CalibrationSample, CalibrationResult, EyeFeatureVector } from '../types/tracking';
+import {
+  CalibrationTarget,
+  CalibrationSample,
+  CalibrationResult,
+  EyeFeatureVector,
+  CentralBaselineData,
+  Point2D,
+} from '../types/tracking';
 import { CalibrationPoints } from './CalibrationPoints';
 import { SampleCollector } from './SampleCollector';
 import { GazeModel } from '../eyeTracking/GazeModel';
-import { CalibrationValidator } from './CalibrationValidator';
+import { CoordinateManager } from './CoordinateManager';
 
-export type CalibrationStep = 'idle' | 'countdown' | 'calibrating' | 'validating' | 'completed' | 'failed';
+export type CalibrationWorkflowStep =
+  | 'idle'
+  | 'positioning'
+  | 'baseline'
+  | 'calibrating'
+  | 'fitting'
+  | 'validating'
+  | 'completed'
+  | 'failed';
 
 export interface CalibrationState {
-  step: CalibrationStep;
+  step: CalibrationWorkflowStep;
   currentTarget: CalibrationTarget | null;
   targetIndex: number;
   totalTargets: number;
@@ -20,6 +38,8 @@ export interface CalibrationState {
   overallProgress: number; // 0 to 1
   result: CalibrationResult | null;
   statusMessage: string;
+  isPaused: boolean;
+  centralBaseline: CentralBaselineData | null;
 }
 
 export type CalibrationStateListener = (state: CalibrationState) => void;
@@ -27,16 +47,26 @@ export type CalibrationStateListener = (state: CalibrationState) => void;
 export class CalibrationManager {
   private gazeModel: GazeModel;
   private collector: SampleCollector;
+
+  private baselineTarget: CalibrationTarget | null = null;
   private trainTargets: CalibrationTarget[] = [];
   private validationTargets: CalibrationTarget[] = [];
+
+  private baselineSamples: EyeFeatureVector[] = [];
+  private centralBaseline: CentralBaselineData | null = null;
+
   private allTrainSamples: CalibrationSample[] = [];
   private allValSamples: CalibrationSample[] = [];
 
   private currentTargetIndex: number = 0;
-  private step: CalibrationStep = 'idle';
-  private statusMessage: string = 'Ready to calibrate';
+  private step: CalibrationWorkflowStep = 'idle';
+  private statusMessage: string = 'Ready to begin calibration';
   private result: CalibrationResult | null = null;
   private method: '9-point' | '17-point' = '9-point';
+  private isPaused: boolean = false;
+
+  private screenWidth: number = 1920;
+  private screenHeight: number = 1080;
 
   private listeners: Set<CalibrationStateListener> = new Set();
 
@@ -52,131 +82,284 @@ export class CalibrationManager {
   }
 
   public getState(): CalibrationState {
-    const total = this.step === 'validating' ? this.validationTargets.length : this.trainTargets.length;
-    const currentTarget = this.collector.getCurrentTarget();
     const targetProgress = this.collector.getProgress();
 
+    let total = 0;
+    let currentIdx = 0;
     let overallProgress = 0;
-    if (this.step === 'calibrating') {
-      const completed = this.currentTargetIndex;
-      overallProgress = (completed + targetProgress) / (this.trainTargets.length + this.validationTargets.length);
-    } else if (this.step === 'validating') {
+
+    if (this.step === 'baseline') {
+      total = 1;
+      currentIdx = 1;
+      overallProgress = 0.05 + targetProgress * 0.15;
+    } else if (this.step === 'calibrating') {
+      total = this.trainTargets.length;
+      currentIdx = this.currentTargetIndex + 1;
       const trainTotal = this.trainTargets.length;
-      const completedVal = this.currentTargetIndex;
-      overallProgress = (trainTotal + completedVal + targetProgress) / (trainTotal + this.validationTargets.length);
+      overallProgress = 0.20 + ((this.currentTargetIndex + targetProgress) / trainTotal) * 0.50;
+    } else if (this.step === 'fitting') {
+      total = this.trainTargets.length;
+      currentIdx = this.trainTargets.length;
+      overallProgress = 0.72;
+    } else if (this.step === 'validating') {
+      total = this.validationTargets.length;
+      currentIdx = this.currentTargetIndex + 1;
+      const valTotal = this.validationTargets.length;
+      overallProgress = 0.75 + ((this.currentTargetIndex + targetProgress) / valTotal) * 0.25;
     } else if (this.step === 'completed') {
       overallProgress = 1.0;
     }
 
     return {
       step: this.step,
-      currentTarget,
-      targetIndex: this.currentTargetIndex + 1,
+      currentTarget: this.collector.getCurrentTarget(),
+      targetIndex: currentIdx,
       totalTargets: total,
       targetProgress,
-      overallProgress,
+      overallProgress: Math.min(1.0, overallProgress),
       result: this.result,
       statusMessage: this.statusMessage,
+      isPaused: this.isPaused,
+      centralBaseline: this.centralBaseline,
     };
   }
 
   /**
-   * Start calibration workflow
+   * Start guided calibration sequence
    */
   public start(screenWidth: number, screenHeight: number, method: '9-point' | '17-point' = '9-point'): void {
+    this.screenWidth = screenWidth;
+    this.screenHeight = screenHeight;
     this.method = method;
+
     this.allTrainSamples = [];
     this.allValSamples = [];
+    this.baselineSamples = [];
+    this.centralBaseline = null;
     this.result = null;
+    this.isPaused = false;
 
-    if (method === '17-point') {
-      const grid = CalibrationPoints.get17PointGrid(screenWidth, screenHeight);
-      this.trainTargets = grid.trainTargets;
-      this.validationTargets = grid.validationTargets;
-    } else {
-      const grid = CalibrationPoints.get9PointGrid(screenWidth, screenHeight);
-      this.trainTargets = grid.trainTargets;
-      this.validationTargets = grid.validationTargets;
-    }
+    const grid = CalibrationPoints.get9PointGrid(screenWidth, screenHeight);
+    this.baselineTarget = grid.baselineTarget;
+    this.trainTargets = grid.trainTargets;
+    this.validationTargets = grid.validationTargets;
 
-    this.currentTargetIndex = 0;
-    this.step = 'calibrating';
-    this.statusMessage = 'Look steadily at the circle until it fills';
-
-    this.collector.startTarget(this.trainTargets[0], 18);
+    // STEP B: Start Central Baseline acquisition (3.5 seconds = 35 frames)
+    this.step = 'baseline';
+    this.statusMessage = 'Step 1/3: Look comfortably at the central circle to set your baseline';
+    this.collector.startTarget(this.baselineTarget, 30, 1000);
     this.notify();
   }
 
   /**
-   * Feed a new camera frame feature vector into calibration manager
+   * Process a camera feature vector during active calibration or validation
    */
   public processFeatureVector(features: EyeFeatureVector, screenWidth: number, screenHeight: number): void {
-    if (this.step !== 'calibrating' && this.step !== 'validating') {
+    if (this.isPaused) return;
+
+    this.screenWidth = screenWidth;
+    this.screenHeight = screenHeight;
+
+    if (this.step === 'baseline') {
+      // Accumulate raw frames for central baseline estimation
+      this.baselineSamples.push(features);
+      const isDone = this.collector.addSample(features);
+
+      if (isDone) {
+        this.finishCentralBaseline();
+      }
+      this.notify();
       return;
     }
 
-    const isTargetDone = this.collector.addSample(features);
+    if (this.step === 'calibrating') {
+      const isDone = this.collector.addSample(features);
+      if (isDone) {
+        // Collect samples from this target
+        const samples = this.collector.getCollectedSamples();
+        this.allTrainSamples.push(...samples);
 
-    if (isTargetDone) {
-      const collected = this.collector.getCollectedSamples();
-
-      if (this.step === 'calibrating') {
-        this.allTrainSamples.push(...collected);
         this.currentTargetIndex++;
-
         if (this.currentTargetIndex < this.trainTargets.length) {
-          // Move to next training target
-          this.collector.startTarget(this.trainTargets[this.currentTargetIndex], 18);
+          // Advance to next calibration target
+          const nextTarget = this.trainTargets[this.currentTargetIndex];
+          this.statusMessage = `Target ${this.currentTargetIndex + 1} of ${this.trainTargets.length}: Look at the circle`;
+          this.collector.startTarget(nextTarget, 20, 1000);
         } else {
-          // All training targets done! Switch to validation targets
-          this.step = 'validating';
-          this.currentTargetIndex = 0;
-          this.statusMessage = 'Validating tracking accuracy... Keep looking at the target';
-          this.collector.startTarget(this.validationTargets[0], 12);
-        }
-      } else if (this.step === 'validating') {
-        this.allValSamples.push(...collected);
-        this.currentTargetIndex++;
-
-        if (this.currentTargetIndex < this.validationTargets.length) {
-          this.collector.startTarget(this.validationTargets[this.currentTargetIndex], 12);
-        } else {
-          // Calibration + Validation complete! Fit model.
-          this.finishCalibration(screenWidth, screenHeight);
+          // All 9 training targets collected! Proceed to model fitting & LOOCV
+          this.fitModelAndStartValidation();
         }
       }
+      this.notify();
+      return;
     }
 
-    this.notify();
+    if (this.step === 'validating') {
+      const isDone = this.collector.addSample(features);
+      if (isDone) {
+        const samples = this.collector.getCollectedSamples();
+        this.allValSamples.push(...samples);
+
+        this.currentTargetIndex++;
+        if (this.currentTargetIndex < this.validationTargets.length) {
+          const nextValTarget = this.validationTargets[this.currentTargetIndex];
+          this.statusMessage = `Validating ${this.currentTargetIndex + 1} of ${this.validationTargets.length}: Keep looking steadily`;
+          this.collector.startTarget(nextValTarget, 16, 800);
+        } else {
+          // Independent validation complete! Compute final metrics.
+          this.finishValidation();
+        }
+      }
+      this.notify();
+      return;
+    }
   }
 
-  private finishCalibration(screenWidth: number, screenHeight: number): void {
-    this.collector.reset();
-    try {
-      this.statusMessage = 'Computing personalized gaze model...';
-      this.notify();
+  private finishCentralBaseline(): void {
+    if (this.baselineSamples.length === 0) return;
 
-      const result = this.gazeModel.train(
+    // Calculate median neutral head pose and iris positions
+    const yaws = this.baselineSamples.map(s => s.headYaw).sort((a, b) => a - b);
+    const pitches = this.baselineSamples.map(s => s.headPitch).sort((a, b) => a - b);
+    const rolls = this.baselineSamples.map(s => s.headRoll).sort((a, b) => a - b);
+    const leftIrisXs = this.baselineSamples.map(s => s.leftIrisX).sort((a, b) => a - b);
+    const leftIrisYs = this.baselineSamples.map(s => s.leftIrisY).sort((a, b) => a - b);
+    const rightIrisXs = this.baselineSamples.map(s => s.rightIrisX).sort((a, b) => a - b);
+    const rightIrisYs = this.baselineSamples.map(s => s.rightIrisY).sort((a, b) => a - b);
+
+    const mid = Math.floor(this.baselineSamples.length / 2);
+
+    this.centralBaseline = {
+      neutralYaw: yaws[mid],
+      neutralPitch: pitches[mid],
+      neutralRoll: rolls[mid],
+      neutralLeftIris: { x: leftIrisXs[mid], y: leftIrisYs[mid] },
+      neutralRightIris: { x: rightIrisXs[mid], y: rightIrisYs[mid] },
+      neutralFaceCenter: { x: 0.5, y: 0.5 },
+      collectedAt: Date.now(),
+    };
+
+    this.gazeModel.setCentralBaseline(this.centralBaseline);
+
+    // Transition to Step C: 9-Point Calibration
+    this.step = 'calibrating';
+    this.currentTargetIndex = 0;
+    this.statusMessage = 'Step 2/3: 9-Point Calibration. Look at each circle as it appears.';
+    this.collector.startTarget(this.trainTargets[0], 20, 1000);
+  }
+
+  private fitModelAndStartValidation(): void {
+    this.step = 'fitting';
+    this.statusMessage = 'Computing best gaze model using Cross-Validation...';
+    this.notify();
+
+    // Fit model on training samples
+    try {
+      this.gazeModel.train(
         this.allTrainSamples,
-        this.allValSamples,
-        screenWidth,
-        screenHeight,
+        [], // Empty validation targets during initial fitting
+        this.screenWidth,
+        this.screenHeight,
         this.method
       );
 
-      this.result = result;
+      // Transition to Step E: Independent 5-Point Validation
+      this.step = 'validating';
+      this.currentTargetIndex = 0;
+      this.statusMessage = 'Step 3/3: Independent Validation. Look at each validation target.';
+      this.collector.startTarget(this.validationTargets[0], 16, 800);
+    } catch (err) {
+      console.error('Model fitting failed:', err);
+      this.step = 'failed';
+      this.statusMessage = 'Calibration failed during model fitting. Please try again with steady lighting.';
+    }
+    this.notify();
+  }
 
-      if (result.passed) {
+  private finishValidation(): void {
+    try {
+      // Re-run evaluation with collected held-out validation samples
+      const finalResult = this.gazeModel.train(
+        this.allTrainSamples,
+        this.allValSamples,
+        this.screenWidth,
+        this.screenHeight,
+        this.method
+      );
+
+      this.result = finalResult;
+
+      if (finalResult.passed) {
         this.step = 'completed';
-        this.statusMessage = `Calibration successful! Accuracy: ${result.overallAccuracyPercentage}% (Error: ${result.meanValidationPixelError}px)`;
+        this.statusMessage = `Calibration Passed! Validation Accuracy: ${finalResult.overallAccuracyPercentage}% (Mean Error: ${finalResult.meanValidationPixelError} px)`;
       } else {
         this.step = 'failed';
-        this.statusMessage = `Calibration needs adjustment (${result.overallAccuracyPercentage}% accuracy). Extended 17-point calibration recommended.`;
+        this.statusMessage = `Calibration needs adjustment (${finalResult.overallAccuracyPercentage}% accuracy, ${finalResult.meanValidationPixelError} px error). Please recalibrate.`;
       }
     } catch (err) {
-      console.error('Calibration fit failed:', err);
+      console.error('Validation computation error:', err);
       this.step = 'failed';
-      this.statusMessage = 'Model fitting error. Please ensure stable lighting and try again.';
+      this.statusMessage = 'Validation calculation error. Please retry.';
+    }
+    this.notify();
+  }
+
+  /**
+   * Caregiver / Tester Controls: Pause or Resume
+   */
+  public togglePause(): void {
+    this.isPaused = !this.isPaused;
+    this.collector.setPaused(this.isPaused);
+    this.statusMessage = this.isPaused ? 'Calibration Paused' : 'Calibration Resumed';
+    this.notify();
+  }
+
+  /**
+   * Caregiver / Tester Controls: Retry current target
+   */
+  public retryCurrentTarget(): void {
+    if (this.step === 'baseline' && this.baselineTarget) {
+      this.baselineSamples = [];
+      this.collector.startTarget(this.baselineTarget, 30, 1000);
+      this.statusMessage = 'Retrying central baseline fixation...';
+    } else if (this.step === 'calibrating') {
+      const cur = this.trainTargets[this.currentTargetIndex];
+      this.collector.startTarget(cur, 20, 1000);
+      this.statusMessage = `Retrying Target ${this.currentTargetIndex + 1}...`;
+    } else if (this.step === 'validating') {
+      const cur = this.validationTargets[this.currentTargetIndex];
+      this.collector.startTarget(cur, 16, 800);
+      this.statusMessage = `Retrying Validation Target ${this.currentTargetIndex + 1}...`;
+    }
+    this.notify();
+  }
+
+  /**
+   * Caregiver / Tester Controls: Advance manually to next target
+   */
+  public advanceTarget(): void {
+    if (this.step === 'baseline') {
+      this.finishCentralBaseline();
+    } else if (this.step === 'calibrating') {
+      const samples = this.collector.getCollectedSamples();
+      if (samples.length > 0) this.allTrainSamples.push(...samples);
+
+      this.currentTargetIndex++;
+      if (this.currentTargetIndex < this.trainTargets.length) {
+        this.collector.startTarget(this.trainTargets[this.currentTargetIndex], 20, 1000);
+      } else {
+        this.fitModelAndStartValidation();
+      }
+    } else if (this.step === 'validating') {
+      const samples = this.collector.getCollectedSamples();
+      if (samples.length > 0) this.allValSamples.push(...samples);
+
+      this.currentTargetIndex++;
+      if (this.currentTargetIndex < this.validationTargets.length) {
+        this.collector.startTarget(this.validationTargets[this.currentTargetIndex], 16, 800);
+      } else {
+        this.finishValidation();
+      }
     }
     this.notify();
   }

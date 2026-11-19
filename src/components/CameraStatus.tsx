@@ -5,9 +5,9 @@
  */
 
 import React from 'react';
-import { CameraDiagnosticInfo, InputMode } from '../types/tracking';
+import { CameraDiagnosticInfo, InputMode, TrackingSystemStatus } from '../types/tracking';
 import { DwellButton } from './DwellButton';
-import { Settings, Eye, Compass, Moon, Play, ArrowLeft } from 'lucide-react';
+import { Settings, Eye, Compass, Moon, Play, ArrowLeft, AlertTriangle } from 'lucide-react';
 
 interface CameraStatusProps {
   diagnosticInfo: CameraDiagnosticInfo;
@@ -18,6 +18,7 @@ interface CameraStatusProps {
   onOpenSettings: () => void;
   onNavigateHome?: () => void;
   showBackHome?: boolean;
+  isCalibrated?: boolean;
 }
 
 export const CameraStatus: React.FC<CameraStatusProps> = ({
@@ -29,8 +30,54 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
   onOpenSettings,
   onNavigateHome,
   showBackHome = false,
+  isCalibrated = false,
 }) => {
-  const isHealthy = diagnosticInfo.faceDetected && !diagnosticInfo.trackingLost;
+  // Determine distinct system status
+  let statusText = 'Camera unavailable';
+  let statusColor = '#A75B51';
+  let statusBg = 'var(--surface-sand)';
+  const fps = diagnosticInfo.actualFps;
+  const isFpsLow = fps > 0 && fps < 18;
+
+  if (diagnosticInfo.systemStatus === 'camera_unavailable') {
+    statusText = 'Camera unavailable';
+    statusColor = '#A75B51';
+  } else if (!diagnosticInfo.faceDetected) {
+    statusText = 'Face not detected';
+    statusColor = '#A75B51';
+  } else if (!diagnosticInfo.eyeRegionsClear) {
+    statusText = 'Eyes obscured';
+    statusColor = '#C48324';
+  } else if (!isCalibrated && mode === 'eye') {
+    statusText = 'Calibration required';
+    statusColor = '#56675F';
+    statusBg = 'var(--surface-sage)';
+  } else if (diagnosticInfo.systemStatus === 'calibration_required') {
+    statusText = 'Calibration required';
+    statusColor = '#56675F';
+  } else if (diagnosticInfo.systemStatus === 'calibrating') {
+    statusText = 'Calibration in progress';
+    statusColor = '#42685A';
+    statusBg = 'var(--surface-sage)';
+  } else if (diagnosticInfo.systemStatus === 'validating') {
+    statusText = 'Validation in progress';
+    statusColor = '#42685A';
+    statusBg = 'var(--surface-sage)';
+  } else if (diagnosticInfo.systemStatus === 'validation_failed') {
+    statusText = 'Validation failed';
+    statusColor = '#A75B51';
+  } else if (diagnosticInfo.systemStatus === 'temporarily_unavailable') {
+    statusText = 'Tracking temporarily unavailable';
+    statusColor = '#C48324';
+  } else if (diagnosticInfo.faceDetected && diagnosticInfo.eyeRegionsClear && isCalibrated) {
+    statusText = isFpsLow ? `Tracking Validated (${fps} FPS — Slow)` : `Tracking Validated (${fps || 30} FPS)`;
+    statusColor = '#42685A';
+    statusBg = 'var(--surface-sage)';
+  } else if (mode === 'head' && diagnosticInfo.faceDetected) {
+    statusText = `Head Tracking Active (${fps || 30} FPS)`;
+    statusColor = '#42685A';
+    statusBg = 'var(--surface-sage)';
+  }
 
   return (
     <header
@@ -93,10 +140,10 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '12px',
-          padding: '6px 14px',
+          gap: '10px',
+          padding: '6px 16px',
           borderRadius: 'var(--radius-full)',
-          backgroundColor: isHealthy ? 'var(--surface-sage)' : 'var(--surface-sand)',
+          backgroundColor: statusBg,
           border: '1px solid var(--border)',
           fontSize: '0.95rem',
           fontWeight: 600,
@@ -108,17 +155,16 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
             width: '10px',
             height: '10px',
             borderRadius: '50%',
-            backgroundColor: isHealthy ? '#42685A' : '#A75B51',
+            backgroundColor: statusColor,
             display: 'inline-block',
           }}
         />
-        <span>
-          {isHealthy
-            ? `Tracking Stable (${diagnosticInfo.actualFps || 30} FPS)`
-            : diagnosticInfo.faceDetected
-            ? 'Adjust Lighting / Face Screen'
-            : 'Looking for Face...'}
-        </span>
+        <span>{statusText}</span>
+        {isFpsLow && (
+          <span title="Low frame rate warning">
+            <AlertTriangle size={15} color="#C48324" />
+          </span>
+        )}
       </div>
 
       {/* Right: Rest / Pause + Settings controls */}

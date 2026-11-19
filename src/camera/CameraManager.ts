@@ -17,10 +17,12 @@ export class CameraManager {
   private stream: MediaStream | null = null;
   private isRunning: boolean = false;
   private animationFrameId: number | null = null;
+  private videoCallbackId: number | null = null;
   private lastFrameTimestamp: number = 0;
   private frameCount: number = 0;
   private lastFpsUpdateTime: number = 0;
   private currentFps: number = 0;
+  private isProcessingFrame: boolean = false;
 
   private diagnosticInfo: CameraDiagnosticInfo = {
     deviceId: '',
@@ -32,6 +34,7 @@ export class CameraManager {
     eyeRegionsClear: false,
     trackingLost: false,
     lightingQuality: 'unknown',
+    systemStatus: 'camera_unavailable',
   };
 
   private callbacks: CameraManagerCallbacks = {};
@@ -120,9 +123,14 @@ export class CameraManager {
    */
   public stopCamera(): void {
     this.isRunning = false;
+    this.isProcessingFrame = false;
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
+    }
+    if (this.videoCallbackId !== null && this.videoElement && 'cancelVideoFrameCallback' in this.videoElement) {
+      (this.videoElement as any).cancelVideoFrameCallback(this.videoCallbackId);
+      this.videoCallbackId = null;
     }
     if (this.stream) {
       this.stream.getTracks().forEach(track => track.stop());
@@ -133,14 +141,14 @@ export class CameraManager {
       this.videoElement = null;
     }
     this.diagnosticInfo.actualFps = 0;
+    this.diagnosticInfo.systemStatus = 'camera_unavailable';
     this.notifyStatus();
   }
 
   private startFrameLoop(): void {
-    const loop = (now: number) => {
+    const handleFrame = (now: number) => {
       if (!this.isRunning || !this.videoElement) return;
 
-      // Calculate actual running FPS
       this.frameCount++;
       const elapsed = now - this.lastFpsUpdateTime;
       if (elapsed >= 1000) {
@@ -151,18 +159,44 @@ export class CameraManager {
         this.notifyStatus();
       }
 
-      // If video has updated frame
-      if (this.videoElement.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-        this.callbacks.onFrame?.(this.videoElement, now);
+      // Guard against overlapping frame processing
+      if (!this.isProcessingFrame && this.videoElement.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        this.isProcessingFrame = true;
+        try {
+          this.callbacks.onFrame?.(this.videoElement, now);
+        } finally {
+          this.isProcessingFrame = false;
+        }
       }
 
-      this.animationFrameId = requestAnimationFrame(loop);
+      // Schedule next frame
+      if (this.isRunning && this.videoElement) {
+        if ('requestVideoFrameCallback' in this.videoElement) {
+          this.videoCallbackId = (this.videoElement as any).requestVideoFrameCallback((_: any, metadata: any) => {
+            handleFrame(metadata.expectedDisplayTime || performance.now());
+          });
+        } else {
+          this.animationFrameId = requestAnimationFrame(handleFrame);
+        }
+      }
     };
 
-    this.animationFrameId = requestAnimationFrame(loop);
+    if (this.videoElement && 'requestVideoFrameCallback' in this.videoElement) {
+      this.videoCallbackId = (this.videoElement as any).requestVideoFrameCallback((_: any, metadata: any) => {
+        handleFrame(metadata.expectedDisplayTime || performance.now());
+      });
+    } else {
+      this.animationFrameId = requestAnimationFrame(handleFrame);
+    }
   }
 
-  public updateVisionDiagnostics(faceDetected: boolean, eyeRegionsClear: boolean, lighting: 'good' | 'low' | 'harsh'): void {
+  public updateVisionDiagnostics(
+    faceDetected: boolean,
+    eyeRegionsClear: boolean,
+    lighting: 'good' | 'low' | 'harsh',
+    faceBox?: { x: number; y: number; width: number; height: number },
+    status?: any
+  ): void {
     const trackingLost = !faceDetected || !eyeRegionsClear;
     let changed = false;
 
@@ -170,7 +204,8 @@ export class CameraManager {
       this.diagnosticInfo.faceDetected !== faceDetected ||
       this.diagnosticInfo.eyeRegionsClear !== eyeRegionsClear ||
       this.diagnosticInfo.trackingLost !== trackingLost ||
-      this.diagnosticInfo.lightingQuality !== lighting
+      this.diagnosticInfo.lightingQuality !== lighting ||
+      this.diagnosticInfo.systemStatus !== status
     ) {
       changed = true;
     }
@@ -179,6 +214,8 @@ export class CameraManager {
     this.diagnosticInfo.eyeRegionsClear = eyeRegionsClear;
     this.diagnosticInfo.trackingLost = trackingLost;
     this.diagnosticInfo.lightingQuality = lighting;
+    if (faceBox) this.diagnosticInfo.faceBox = faceBox;
+    if (status) this.diagnosticInfo.systemStatus = status;
 
     if (changed) {
       this.notifyStatus();

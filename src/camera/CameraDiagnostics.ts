@@ -7,22 +7,31 @@
 export class CameraDiagnostics {
   private static canvas: HTMLCanvasElement | null = null;
   private static ctx: CanvasRenderingContext2D | null = null;
+  private static lastCheckTime: number = 0;
+  private static lastResult: 'good' | 'low' | 'harsh' = 'good';
+  private static readonly THROTTLE_MS = 1500; // Only sample lighting every 1.5 seconds to avoid GPU-CPU readback stalls
 
-  public static analyzeLighting(video: HTMLVideoElement): 'good' | 'low' | 'harsh' {
+  public static analyzeLighting(video: HTMLVideoElement, force: boolean = false): 'good' | 'low' | 'harsh' {
     try {
-      if (video.videoWidth === 0 || video.videoHeight === 0) return 'unknown' as any;
+      if (video.videoWidth === 0 || video.videoHeight === 0) return 'good';
+
+      const now = performance.now();
+      if (!force && now - this.lastCheckTime < this.THROTTLE_MS) {
+        return this.lastResult;
+      }
+      this.lastCheckTime = now;
 
       if (!this.canvas) {
         this.canvas = document.createElement('canvas');
-        this.canvas.width = 64; // Subsampled for ultra-fast diagnostic
-        this.canvas.height = 48;
+        this.canvas.width = 32; // Ultra-compact for instant check
+        this.canvas.height = 24;
         this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
       }
 
       if (!this.ctx) return 'good';
 
-      this.ctx.drawImage(video, 0, 0, 64, 48);
-      const imgData = this.ctx.getImageData(0, 0, 64, 48).data;
+      this.ctx.drawImage(video, 0, 0, 32, 24);
+      const imgData = this.ctx.getImageData(0, 0, 32, 24).data;
       let totalLuminance = 0;
       const count = imgData.length / 4;
 
@@ -30,18 +39,19 @@ export class CameraDiagnostics {
         const r = imgData[i];
         const g = imgData[i + 1];
         const b = imgData[i + 2];
-        // Standard relative luminance (ITU-R BT.709)
         totalLuminance += 0.2126 * r + 0.7152 * g + 0.0722 * b;
       }
 
       const avgLuminance = totalLuminance / count;
 
       if (avgLuminance < 40) {
-        return 'low';
+        this.lastResult = 'low';
       } else if (avgLuminance > 225) {
-        return 'harsh';
+        this.lastResult = 'harsh';
+      } else {
+        this.lastResult = 'good';
       }
-      return 'good';
+      return this.lastResult;
     } catch {
       return 'good';
     }

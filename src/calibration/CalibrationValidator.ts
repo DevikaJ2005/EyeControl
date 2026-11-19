@@ -54,7 +54,8 @@ export class CalibrationValidator {
       const avgPred: Point2D = { x: sumX / count, y: sumY / count };
       const pixelError = Math.hypot(avgPred.x - val.targetPos.x, avgPred.y - val.targetPos.y);
 
-      if (pixelError <= acceptanceRadius) {
+      const isHit = pixelError <= acceptanceRadius;
+      if (isHit) {
         hitCount++;
       }
 
@@ -62,10 +63,13 @@ export class CalibrationValidator {
       metrics.push({
         targetId: id,
         targetPos: val.targetPos,
+        targetNormalized: { x: val.targetPos.x / screenWidth, y: val.targetPos.y / screenHeight },
         averagePredictedPos: avgPred,
+        averagePredictedNormalized: { x: avgPred.x / screenWidth, y: avgPred.y / screenHeight },
         pixelError: Math.round(pixelError),
-        normalizedError: pixelError / Math.hypot(screenWidth, screenHeight),
+        normalizedError: Number((pixelError / Math.hypot(screenWidth, screenHeight)).toFixed(4)),
         sampleCount: count,
+        isHit,
       });
     });
 

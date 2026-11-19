@@ -3,29 +3,41 @@
  * Extracts normalized eye geometry, iris positions, and openness ratios from FaceLandmarker landmarks.
  */
 
-import { NormalizedLandmark, EyeLandmarks, EyeFeatureVector, HeadPose } from '../types/tracking';
+import { NormalizedLandmark, EyeLandmarks, EyeFeatureVector, HeadPose, CentralBaselineData, FaceBoundingBox, Point2D } from '../types/tracking';
+
+export interface EyeDiagnosticData {
+  faceBox: FaceBoundingBox;
+  faceCenter: Point2D;
+  leftIris: Point2D;
+  rightIris: Point2D;
+  leftEyeBox: FaceBoundingBox;
+  rightEyeBox: FaceBoundingBox;
+  leftOpenness: number;
+  rightOpenness: number;
+}
 
 export class EyeFeatureExtractor {
   // Landmark indices for MediaPipe Face Mesh (468+ mesh with irises)
-  // Left eye
-  private static readonly LEFT_IRIS_CENTER = 468;
-  private static readonly LEFT_OUTER_CORNER = 33;
-  private static readonly LEFT_INNER_CORNER = 133;
-  private static readonly LEFT_UPPER_LID = 159;
-  private static readonly LEFT_LOWER_LID = 145;
+  // Left eye (subject's right eye, viewer's left in mirrored or camera view)
+  public static readonly LEFT_IRIS_CENTER = 468;
+  public static readonly LEFT_OUTER_CORNER = 33;
+  public static readonly LEFT_INNER_CORNER = 133;
+  public static readonly LEFT_UPPER_LID = 159;
+  public static readonly LEFT_LOWER_LID = 145;
 
-  // Right eye
-  private static readonly RIGHT_IRIS_CENTER = 473;
-  private static readonly RIGHT_INNER_CORNER = 362;
-  private static readonly RIGHT_OUTER_CORNER = 263;
-  private static readonly RIGHT_UPPER_LID = 386;
-  private static readonly RIGHT_LOWER_LID = 374;
+  // Right eye (subject's left eye, viewer's right)
+  public static readonly RIGHT_IRIS_CENTER = 473;
+  public static readonly RIGHT_INNER_CORNER = 362;
+  public static readonly RIGHT_OUTER_CORNER = 263;
+  public static readonly RIGHT_UPPER_LID = 386;
+  public static readonly RIGHT_LOWER_LID = 374;
 
   // Face boundary landmarks
-  private static readonly FACE_TOP = 10;
-  private static readonly FACE_BOTTOM = 152;
-  private static readonly FACE_LEFT = 234;
-  private static readonly FACE_RIGHT = 454;
+  public static readonly FACE_TOP = 10;
+  public static readonly FACE_BOTTOM = 152;
+  public static readonly FACE_LEFT = 234;
+  public static readonly FACE_RIGHT = 454;
+  public static readonly NOSE_TIP = 1;
 
   /**
    * Extract comprehensive eye landmarks from 478 landmarks array
@@ -140,22 +152,131 @@ export class EyeFeatureExtractor {
   }
 
   /**
-   * Converts EyeFeatureVector into numeric array for regression
+   * Extract face bounding box in normalized coordinates [0..1]
    */
-  public static toNumericArray(fv: EyeFeatureVector): number[] {
+  public static getFaceBoundingBox(landmarks: NormalizedLandmark[]): FaceBoundingBox | null {
+    if (!landmarks || landmarks.length < 468) return null;
+
+    let minX = 1;
+    let maxX = 0;
+    let minY = 1;
+    let maxY = 0;
+
+    for (let i = 0; i < landmarks.length; i++) {
+      const p = landmarks[i];
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+
+    // Add 5% comfortable margin
+    const marginX = (maxX - minX) * 0.05;
+    const marginY = (maxY - minY) * 0.05;
+
+    return {
+      x: Math.max(0, minX - marginX),
+      y: Math.max(0, minY - marginY),
+      width: Math.min(1, maxX - minX + marginX * 2),
+      height: Math.min(1, maxY - minY + marginY * 2),
+    };
+  }
+
+  /**
+   * Extract visual diagnostics data for live camera preview overlay
+   */
+  public static getDiagnosticOverlayData(landmarks: NormalizedLandmark[]): EyeDiagnosticData | null {
+    if (!landmarks || landmarks.length < 478) return null;
+
+    const faceBox = this.getFaceBoundingBox(landmarks) || { x: 0.2, y: 0.2, width: 0.6, height: 0.6 };
+    const nose = landmarks[this.NOSE_TIP] || { x: 0.5, y: 0.5 };
+
+    const leftIris = landmarks[this.LEFT_IRIS_CENTER];
+    const rightIris = landmarks[this.RIGHT_IRIS_CENTER];
+
+    // Left eye box
+    const leftOuter = landmarks[this.LEFT_OUTER_CORNER];
+    const leftInner = landmarks[this.LEFT_INNER_CORNER];
+    const leftUpper = landmarks[this.LEFT_UPPER_LID];
+    const leftLower = landmarks[this.LEFT_LOWER_LID];
+
+    const leftEyeBox: FaceBoundingBox = {
+      x: Math.min(leftOuter.x, leftInner.x) - 0.015,
+      y: Math.min(leftUpper.y, leftLower.y) - 0.015,
+      width: Math.abs(leftInner.x - leftOuter.x) + 0.03,
+      height: Math.abs(leftLower.y - leftUpper.y) + 0.03,
+    };
+
+    // Right eye box
+    const rightOuter = landmarks[this.RIGHT_OUTER_CORNER];
+    const rightInner = landmarks[this.RIGHT_INNER_CORNER];
+    const rightUpper = landmarks[this.RIGHT_UPPER_LID];
+    const rightLower = landmarks[this.RIGHT_LOWER_LID];
+
+    const rightEyeBox: FaceBoundingBox = {
+      x: Math.min(rightOuter.x, rightInner.x) - 0.015,
+      y: Math.min(rightUpper.y, rightLower.y) - 0.015,
+      width: Math.abs(rightOuter.x - rightInner.x) + 0.03,
+      height: Math.abs(rightLower.y - rightUpper.y) + 0.03,
+    };
+
+    const leftWidth = Math.hypot(leftInner.x - leftOuter.x, leftInner.y - leftOuter.y);
+    const leftHeight = Math.hypot(leftLower.x - leftUpper.x, leftLower.y - leftUpper.y);
+    const rightWidth = Math.hypot(rightOuter.x - rightInner.x, rightOuter.y - rightInner.y);
+    const rightHeight = Math.hypot(rightLower.x - rightUpper.x, rightLower.y - rightUpper.y);
+
+    return {
+      faceBox,
+      faceCenter: { x: nose.x, y: nose.y },
+      leftIris: { x: leftIris.x, y: leftIris.y },
+      rightIris: { x: rightIris.x, y: rightIris.y },
+      leftEyeBox,
+      rightEyeBox,
+      leftOpenness: leftWidth > 1e-4 ? leftHeight / leftWidth : 0.28,
+      rightOpenness: rightWidth > 1e-4 ? rightHeight / rightWidth : 0.28,
+    };
+  }
+
+  /**
+   * Converts EyeFeatureVector into numeric array for regression.
+   * If a central baseline is provided, features are normalized relative to the neutral fixation center!
+   */
+  public static toNumericArray(fv: EyeFeatureVector, baseline?: CentralBaselineData | null): number[] {
+    const bYaw = baseline ? baseline.neutralYaw : 0;
+    const bPitch = baseline ? baseline.neutralPitch : 0;
+    const bRoll = baseline ? baseline.neutralRoll : 0;
+    const bLeftX = baseline ? baseline.neutralLeftIris.x : 0.5;
+    const bLeftY = baseline ? baseline.neutralLeftIris.y : 0.5;
+    const bRightX = baseline ? baseline.neutralRightIris.x : 0.5;
+    const bRightY = baseline ? baseline.neutralRightIris.y : 0.5;
+
+    // Relative iris offsets from central baseline
+    const dLeftX = fv.leftIrisX - bLeftX;
+    const dLeftY = fv.leftIrisY - bLeftY;
+    const dRightX = fv.rightIrisX - bRightX;
+    const dRightY = fv.rightIrisY - bRightY;
+
+    // Average binocular iris displacement
+    const dAvgX = (dLeftX + dRightX) / 2;
+    const dAvgY = (dLeftY + dRightY) / 2;
+
+    // Relative head pose delta
+    const dYaw = fv.headYaw - bYaw;
+    const dPitch = fv.headPitch - bPitch;
+    const dRoll = fv.headRoll - bRoll;
+
     return [
-      fv.leftIrisX,
-      fv.leftIrisY,
-      fv.rightIrisX,
-      fv.rightIrisY,
-      fv.leftOpenness,
+      dAvgX,             // Primary horizontal eye gaze signal
+      dAvgY,             // Primary vertical eye gaze signal
+      dLeftX,            // Left eye delta
+      dLeftY,
+      dRightX,           // Right eye delta
+      dRightY,
+      dYaw,              // Compensatory head yaw
+      dPitch,            // Compensatory head pitch
+      dRoll,             // Compensatory head roll
+      fv.leftOpenness,   // Eye state
       fv.rightOpenness,
-      fv.headYaw,
-      fv.headPitch,
-      fv.headRoll,
-      fv.faceCenterX,
-      fv.faceCenterY,
-      fv.faceScale,
     ];
   }
 }

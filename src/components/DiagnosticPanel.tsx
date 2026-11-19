@@ -73,17 +73,29 @@ export const DiagnosticPanel: React.FC<DiagnosticPanelProps> = ({
             TRACKING TELEMETRY ({mode.toUpperCase()})
           </div>
 
-          <div><strong>Camera:</strong> {diagnosticInfo.width}×{diagnosticInfo.height} @ {diagnosticInfo.actualFps} FPS</div>
+          <div><strong>Camera:</strong> {diagnosticInfo.width}×{diagnosticInfo.height} @ {diagnosticInfo.actualFps} FPS {diagnosticInfo.actualFps > 0 && diagnosticInfo.actualFps < 18 ? '(SLOW - Pipeline Throttled)' : ''}</div>
           <div><strong>Face Detected:</strong> {diagnosticInfo.faceDetected ? 'YES' : 'NO'}</div>
+          <div><strong>Eyes Detected:</strong> {diagnosticInfo.eyeRegionsClear ? 'YES' : 'NO'}</div>
           <div><strong>Lighting:</strong> {diagnosticInfo.lightingQuality.toUpperCase()}</div>
+          <div><strong>System State:</strong> {diagnosticInfo.systemStatus || 'READY'}</div>
           
           {prediction && (
             <>
               <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
-                <strong>Cursor Screen:</strong> ({Math.round(prediction.filteredX)}, {Math.round(prediction.filteredY)})
+                <strong>Cursor Screen:</strong> ({Math.round(prediction.filteredX)}, {Math.round(prediction.filteredY)}){' '}
+                {prediction.confidence.isOutOfBounds && (
+                  <span style={{ color: '#E89D93', fontWeight: 'bold' }}>[OUT OF BOUNDS]</span>
+                )}
               </div>
               <div>
-                <strong>Confidence:</strong> {(prediction.confidence.confidence * 100).toFixed(0)}% ({prediction.confidence.isReliable ? 'RELIABLE' : 'UNRELIABLE'})
+                <strong>Normalized:</strong> ({prediction.normalizedX.toFixed(2)}, {prediction.normalizedY.toFixed(2)})
+              </div>
+              <div>
+                <strong>Confidence:</strong> {(prediction.confidence.confidence * 100).toFixed(0)}% (
+                <span style={{ color: prediction.confidence.isReliable ? '#97CAB5' : '#E89D93', fontWeight: 'bold' }}>
+                  {prediction.confidence.isReliable ? 'RELIABLE' : 'UNRELIABLE / UNVALIDATED'}
+                </span>
+                )
               </div>
               {prediction.confidence.reason && (
                 <div style={{ color: '#E89D93' }}>
@@ -95,9 +107,10 @@ export const DiagnosticPanel: React.FC<DiagnosticPanelProps> = ({
 
           {calibrationResult && (
             <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
-              <div><strong>Gaze Model Fit:</strong> R²X: {calibrationResult.r2X.toFixed(2)}, R²Y: {calibrationResult.r2Y.toFixed(2)}</div>
-              <div><strong>Held-Out Accuracy:</strong> {calibrationResult.overallAccuracyPercentage}%</div>
-              <div><strong>Mean Val Error:</strong> {calibrationResult.meanValidationPixelError} px</div>
+              <div><strong>Model:</strong> {calibrationResult.modelType || 'Ridge'} (LOOCV: {calibrationResult.cvScore || 'N/A'})</div>
+              <div><strong>Validation Accuracy:</strong> {calibrationResult.overallAccuracyPercentage}% ({calibrationResult.passed ? 'PASSED' : 'FAILED'})</div>
+              <div><strong>Mean / Median / Max Error:</strong> {calibrationResult.meanValidationPixelError} / {calibrationResult.medianValidationPixelError || calibrationResult.meanValidationPixelError} / {calibrationResult.maxValidationPixelError} px</div>
+              <div><strong>Tracking Loss:</strong> {calibrationResult.trackingLossPercentage || 0}%</div>
             </div>
           )}
         </div>

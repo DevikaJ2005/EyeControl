@@ -1,16 +1,18 @@
 /**
  * EyeTracker
  * Main coordinator for eye gaze tracking. Combines facial landmark extraction,
- * head pose estimation, gaze model inference, confidence calculation, and 1€ filtering.
+ * head pose compensation, gaze model inference, confidence calculation, and 1€ filtering.
+ * Strictly checks out-of-bounds predictions and calibration validation state.
  */
 
-import { GazePrediction, EyeLandmarks, HeadPose, Point2D } from '../types/tracking';
+import { GazePrediction, EyeLandmarks, HeadPose, Point2D, CentralBaselineData } from '../types/tracking';
 import { FaceLandmarkerService } from '../vision/FaceLandmarker';
 import { EyeFeatureExtractor } from '../vision/EyeFeatureExtractor';
 import { HeadPoseEstimator } from '../vision/HeadPoseEstimator';
 import { GazeModel } from './GazeModel';
 import { GazeConfidence } from './GazeConfidence';
 import { OneEuroFilter2D } from '../interaction/OneEuroFilter';
+import { CoordinateManager } from '../calibration/CoordinateManager';
 
 export type GazeListener = (prediction: GazePrediction) => void;
 
@@ -29,13 +31,25 @@ export class EyeTracker {
     this.landmarkerService = FaceLandmarkerService.getInstance();
     this.gazeModel = gazeModel;
     this.confidenceEstimator = new GazeConfidence();
-    // 30 Hz, minCutoff: 0.8 Hz (very smooth when holding gaze), beta: 0.007 (responsive during saccades)
+    // 30 Hz, minCutoff: 0.8 Hz (steady when holding gaze), beta: 0.007 (snappy saccades)
     this.filter = new OneEuroFilter2D(30, 0.8, 0.007);
   }
 
   public subscribe(listener: GazeListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  public setCentralBaseline(baseline: CentralBaselineData | null): void {
+    this.gazeModel.setCentralBaseline(baseline);
+    if (baseline) {
+      this.neutralPose = {
+        yaw: baseline.neutralYaw,
+        pitch: baseline.neutralPitch,
+        roll: baseline.neutralRoll,
+        translation: { x: baseline.neutralFaceCenter.x, y: baseline.neutralFaceCenter.y, z: 0 },
+      };
+    }
   }
 
   public setNeutralPose(pose: HeadPose | null): void {
@@ -62,13 +76,26 @@ export class EyeTracker {
     const result = this.landmarkerService.detectVideoFrame(video, timestamp);
     const hasFace = !!(result && result.faceLandmarks && result.faceLandmarks.length > 0);
 
+    const vp = CoordinateManager.getViewport();
+    const defaultCenter = { x: vp.width / 2, y: vp.height / 2 };
+
+    const isCalibrationValidated = this.gazeModel.getIsTrained() && (this.gazeModel.getLastCalibrationResult()?.passed ?? false);
+
     if (!hasFace) {
-      const conf = this.confidenceEstimator.evaluate(false, null, { yaw: 0, pitch: 0, roll: 0, translation: { x: 0, y: 0, z: 0 } }, null);
+      const conf = this.confidenceEstimator.evaluate(
+        false,
+        null,
+        { yaw: 0, pitch: 0, roll: 0, translation: { x: 0, y: 0, z: 0 } },
+        null,
+        this.neutralPose,
+        isCalibrationValidated
+      );
+
       const prediction: GazePrediction = {
-        rawX: this.lastPrediction?.rawX ?? window.innerWidth / 2,
-        rawY: this.lastPrediction?.rawY ?? window.innerHeight / 2,
-        filteredX: this.lastPrediction?.filteredX ?? window.innerWidth / 2,
-        filteredY: this.lastPrediction?.filteredY ?? window.innerHeight / 2,
+        rawX: this.lastPrediction?.rawX ?? defaultCenter.x,
+        rawY: this.lastPrediction?.rawY ?? defaultCenter.y,
+        filteredX: this.lastPrediction?.filteredX ?? defaultCenter.x,
+        filteredY: this.lastPrediction?.filteredY ?? defaultCenter.y,
         normalizedX: this.lastPrediction?.normalizedX ?? 0.5,
         normalizedY: this.lastPrediction?.normalizedY ?? 0.5,
         confidence: conf,
@@ -88,28 +115,29 @@ export class EyeTracker {
     const eyeLandmarks = EyeFeatureExtractor.extractEyeLandmarks(landmarks);
     const featureVector = EyeFeatureExtractor.buildFeatureVector(landmarks, headPose, timestamp);
 
-    // 3. Model inference
-    let rawX = window.innerWidth / 2;
-    let rawY = window.innerHeight / 2;
+    // 3. Model inference in normalized coordinates
+    let rawX = defaultCenter.x;
+    let rawY = defaultCenter.y;
     let normPos: Point2D | null = null;
 
     if (featureVector && this.gazeModel.getIsTrained()) {
       const pred = this.gazeModel.predict(featureVector);
+      normPos = pred.normalized;
       rawX = pred.pixel.x;
       rawY = pred.pixel.y;
-      normPos = pred.normalized;
     }
 
-    // 4. Evaluate confidence
+    // 4. Evaluate confidence with out-of-bounds rejection and validation check
     const confidence = this.confidenceEstimator.evaluate(
       true,
       eyeLandmarks,
       headPose,
       normPos,
-      this.neutralPose
+      this.neutralPose,
+      isCalibrationValidated
     );
 
-    // 5. Apply OneEuroFilter only when tracking confidence is reliable
+    // 5. Apply OneEuroFilter only when tracking is reliable and within bounds
     let filteredX = rawX;
     let filteredY = rawY;
 
@@ -118,15 +146,15 @@ export class EyeTracker {
       filteredX = filtered.x;
       filteredY = filtered.y;
     } else if (this.lastPrediction) {
-      // Freeze position when confidence is low rather than jumping wildly
+      // Freeze position when confidence is low or out of bounds rather than jumping wildly
       filteredX = this.lastPrediction.filteredX;
       filteredY = this.lastPrediction.filteredY;
       rawX = this.lastPrediction.rawX;
       rawY = this.lastPrediction.rawY;
     }
 
-    const normalizedX = Math.max(0, Math.min(1.0, filteredX / window.innerWidth));
-    const normalizedY = Math.max(0, Math.min(1.0, filteredY / window.innerHeight));
+    const normalizedX = vp.width > 0 ? filteredX / vp.width : 0.5;
+    const normalizedY = vp.height > 0 ? filteredY / vp.height : 0.5;
 
     const prediction: GazePrediction = {
       rawX,

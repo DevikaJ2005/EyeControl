@@ -17,7 +17,7 @@ import { TrackingStateManager } from './interaction/TrackingStateManager';
 import { AccessibilityManager, DEFAULT_SETTINGS } from './accessibility/AccessibilitySettings';
 import { CalibrationStorage } from './storage/CalibrationStorage';
 import { HeadPoseEstimator } from './vision/HeadPoseEstimator';
-import { EyeFeatureExtractor } from './vision/EyeFeatureExtractor';
+import { EyeFeatureExtractor, EyeDiagnosticData } from './vision/EyeFeatureExtractor';
 import {
   CameraDiagnosticInfo,
   GazePrediction,
@@ -64,6 +64,7 @@ export const App: React.FC = () => {
 
   const [currentPrediction, setCurrentPrediction] = useState<GazePrediction | null>(null);
   const [calibrationResult, setCalibrationResult] = useState<CalibrationResult | null>(null);
+  const [overlayData, setOverlayData] = useState<EyeDiagnosticData | null>(null);
 
   // Engine Singletons & Managers
   const cameraManagerRef = useRef<CameraManager | null>(null);
@@ -93,25 +94,41 @@ export const App: React.FC = () => {
     // 2. Camera Manager with frame dispatch
     const cameraManager = new CameraManager({
       onFrame: (video, timestamp) => {
-        // Fast lighting diagnostic
+        // Fast lighting diagnostic (throttled inside analyzeLighting)
         const lighting = CameraDiagnostics.analyzeLighting(video);
 
         if (settings.inputMode === 'eye') {
-          // If currently in calibration page and actively recording target
+          // If currently in calibration page and actively recording baseline, target or validation
           const calibState = calibrationManager.getState();
-          if (calibState.step === 'calibrating' || calibState.step === 'validating') {
+          if (
+            calibState.step === 'baseline' ||
+            calibState.step === 'calibrating' ||
+            calibState.step === 'validating'
+          ) {
             const result = FaceLandmarkerService.getInstance().detectVideoFrame(video, timestamp);
             if (result && result.faceLandmarks && result.faceLandmarks[0]) {
-              cameraManager.updateVisionDiagnostics(true, true, lighting);
               const landmarks = result.faceLandmarks[0];
+              const diag = EyeFeatureExtractor.getDiagnosticOverlayData(landmarks);
+              setOverlayData(diag);
+
               const matrix = result.facialTransformationMatrixes?.[0]?.data;
               const pose = HeadPoseEstimator.estimate(landmarks, matrix);
               const fv = EyeFeatureExtractor.buildFeatureVector(landmarks, pose, timestamp);
+
+              cameraManager.updateVisionDiagnostics(
+                true,
+                true,
+                lighting,
+                diag?.faceBox,
+                calibState.step === 'validating' ? 'validating' : 'calibrating'
+              );
+
               if (fv) {
                 calibrationManager.processFeatureVector(fv, window.innerWidth, window.innerHeight);
               }
             } else {
-              cameraManager.updateVisionDiagnostics(false, false, lighting);
+              setOverlayData(null);
+              cameraManager.updateVisionDiagnostics(false, false, lighting, undefined, 'face_not_detected');
             }
           } else {
             // Normal eye gaze tracking
@@ -121,7 +138,9 @@ export const App: React.FC = () => {
               cameraManager.updateVisionDiagnostics(
                 !pred.confidence.isFaceLost,
                 !pred.confidence.isBlinking,
-                lighting
+                lighting,
+                undefined,
+                pred.confidence.systemStatus
               );
               // Update selection engine with gaze point
               selectionManager.update(
@@ -239,10 +258,19 @@ export const App: React.FC = () => {
         backgroundColor: 'var(--background)',
       }}
     >
-      {/* Hidden video element for computer vision processing */}
+      {/* Persistent video element for computer vision pipeline (remains active across all pages) */}
       <video
         ref={hiddenVideoRef}
-        style={{ display: 'none' }}
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '640px',
+          height: '480px',
+          opacity: 0,
+          pointerEvents: 'none',
+          zIndex: -1,
+        }}
         playsInline
         muted
       />
@@ -257,6 +285,7 @@ export const App: React.FC = () => {
         onOpenSettings={() => setIsSettingsOpen(true)}
         showBackHome={currentPage !== 'home' && currentPage !== 'setup'}
         onNavigateHome={() => setCurrentPage('home')}
+        isCalibrated={!!calibrationResult?.passed}
       />
 
       {/* Active Screen Rendering */}
@@ -264,7 +293,9 @@ export const App: React.FC = () => {
         {currentPage === 'setup' && cameraManagerRef.current && (
           <SetupPage
             cameraManager={cameraManagerRef.current}
+            persistentVideoElement={hiddenVideoRef.current}
             diagnosticInfo={diagnosticInfo}
+            overlayData={overlayData}
             selectedMode={settings.inputMode}
             onSelectMode={handleSelectMode}
             onCameraStarted={() => {
@@ -287,6 +318,9 @@ export const App: React.FC = () => {
             calibrationManager={calibrationManagerRef.current}
             headTracker={headTrackerRef.current}
             mode={settings.inputMode}
+            videoElement={cameraManagerRef.current?.getVideoElement() ?? null}
+            diagnosticInfo={diagnosticInfo}
+            overlayData={overlayData}
             onCalibrationComplete={handleCalibrationComplete}
             onNavigateHome={() => setCurrentPage('home')}
           />

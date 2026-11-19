@@ -27,12 +27,17 @@ export const EyeCursor: React.FC<EyeCursorProps> = ({
   const { filteredX, filteredY, confidence } = prediction;
   const isReliable = confidence.isReliable;
 
+  // Reject rendering if coordinates are out of bounds
+  if (confidence.isOutOfBounds || filteredX < -20 || filteredY < -20) {
+    return null;
+  }
+
   return (
     <div
       style={{
         position: 'fixed',
-        left: `${filteredX}px`,
-        top: `${filteredY}px`,
+        left: `${Math.round(filteredX)}px`,
+        top: `${Math.round(filteredY)}px`,
         transform: 'translate(-50%, -50%)',
         pointerEvents: 'none',
         zIndex: 9999,

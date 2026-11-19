@@ -7,12 +7,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CameraManager } from '../camera/CameraManager';
 import { CameraDiagnosticInfo, InputMode } from '../types/tracking';
+import { EyeDiagnosticData } from '../vision/EyeFeatureExtractor';
 import { DwellButton } from '../components/DwellButton';
+import { CameraPreviewOverlay } from '../components/CameraPreviewOverlay';
 import { Camera, CheckCircle2, AlertTriangle, Eye, Compass, ArrowRight, VideoOff } from 'lucide-react';
 
 interface SetupPageProps {
   cameraManager: CameraManager;
+  persistentVideoElement: HTMLVideoElement | null;
   diagnosticInfo: CameraDiagnosticInfo;
+  overlayData: EyeDiagnosticData | null;
   selectedMode: InputMode;
   onSelectMode: (mode: InputMode) => void;
   onCameraStarted: () => void;
@@ -22,24 +26,30 @@ interface SetupPageProps {
 
 export const SetupPage: React.FC<SetupPageProps> = ({
   cameraManager,
+  persistentVideoElement,
   diagnosticInfo,
+  overlayData,
   selectedMode,
   onSelectMode,
   onCameraStarted,
   onCameraStopped,
   onProceedToCalibration,
 }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isCameraActive, setIsCameraActive] = useState(cameraManager.getIsRunning());
   const [isStarting, setIsStarting] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   const startCamera = async () => {
-    if (!videoRef.current) return;
+    const targetVideo = persistentVideoElement;
+    if (!targetVideo) {
+      setCameraError('Video element initialization pending.');
+      return;
+    }
+
     setIsStarting(true);
     setCameraError(null);
 
-    const success = await cameraManager.startCamera(videoRef.current);
+    const success = await cameraManager.startCamera(targetVideo);
     setIsStarting(false);
 
     if (success) {
@@ -117,7 +127,7 @@ export const SetupPage: React.FC<SetupPageProps> = ({
             style={{
               position: 'relative',
               width: '100%',
-              height: '320px',
+              minHeight: '330px',
               backgroundColor: '#1E2A25',
               borderRadius: 'var(--radius-md)',
               overflow: 'hidden',
@@ -126,20 +136,14 @@ export const SetupPage: React.FC<SetupPageProps> = ({
               justifyContent: 'center',
             }}
           >
-            <video
-              ref={videoRef}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                transform: 'scaleX(-1)', // Mirror preview for natural alignment
-                display: isCameraActive ? 'block' : 'none',
-              }}
-              playsInline
-              muted
-            />
-
-            {!isCameraActive && (
+            {isCameraActive ? (
+              <CameraPreviewOverlay
+                videoElement={cameraManager.getVideoElement()}
+                diagnosticInfo={diagnosticInfo}
+                overlayData={overlayData}
+                mode="full"
+              />
+            ) : (
               <div style={{ textAlign: 'center', padding: '24px', color: '#B8C4B8' }}>
                 <Camera size={48} style={{ margin: '0 auto 12px auto', opacity: 0.7 }} />
                 <p style={{ fontSize: 'var(--font-size-base)', fontWeight: 600 }}>
@@ -148,40 +152,6 @@ export const SetupPage: React.FC<SetupPageProps> = ({
                 <p style={{ fontSize: '0.9rem', color: '#8E9E95', marginTop: '4px' }}>
                   Click Start Camera below to begin.
                 </p>
-              </div>
-            )}
-
-            {/* Face alignment guideline overlay */}
-            {isCameraActive && (
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  pointerEvents: 'none',
-                  border: diagnosticInfo.faceDetected
-                    ? '3px solid rgba(66, 104, 90, 0.6)'
-                    : '3px dashed rgba(167, 91, 81, 0.7)',
-                  borderRadius: 'var(--radius-md)',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  justifyContent: 'center',
-                  padding: '12px',
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: 'rgba(30, 42, 37, 0.85)',
-                    color: '#F7F6F0',
-                    padding: '4px 12px',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: '0.9rem',
-                    fontWeight: 600,
-                  }}
-                >
-                  {diagnosticInfo.faceDetected
-                    ? '✓ Face centered & clear'
-                    : 'Align your face inside frame'}
-                </div>
               </div>
             )}
           </div>
