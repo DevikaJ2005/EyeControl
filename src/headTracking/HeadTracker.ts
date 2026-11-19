@@ -23,6 +23,7 @@ export class HeadTracker {
   private isRunning: boolean = false;
   private neutralPose: HeadNeutralPose | null = null;
   private lastPrediction: GazePrediction | null = null;
+  private currentPose: HeadPose | null = null;
 
   constructor() {
     this.landmarkerService = FaceLandmarkerService.getInstance();
@@ -65,16 +66,21 @@ export class HeadTracker {
     this.lastPrediction = null;
   }
 
+  public getCurrentPose(): HeadPose | null {
+    return this.currentPose;
+  }
+
   /**
    * Process a single video frame for head tracking
    */
   public processFrame(video: HTMLVideoElement, timestamp: number): GazePrediction | null {
-    if (!this.isRunning) return null;
+    if (!this.isRunning && !this.calibration.getIsCollecting()) return null;
 
     const result = this.landmarkerService.detectVideoFrame(video, timestamp);
     const hasFace = !!(result && result.faceLandmarks && result.faceLandmarks.length > 0);
 
     if (!hasFace) {
+      this.currentPose = null;
       const conf: GazeConfidenceResult = {
         confidence: 0,
         isReliable: false,
@@ -83,6 +89,7 @@ export class HeadTracker {
         isFaceLost: true,
         isPoseExtreme: false,
         isOutOfBounds: false,
+        systemStatus: 'face_not_detected',
       };
 
       const prediction: GazePrediction = {
@@ -102,6 +109,7 @@ export class HeadTracker {
     const landmarks = result.faceLandmarks[0];
     const matrix = result.facialTransformationMatrixes?.[0]?.data;
     const currentPose = HeadPoseEstimator.estimate(landmarks, matrix);
+    this.currentPose = currentPose;
 
     // If currently calibrating neutral posture, feed sample
     if (this.calibration.getIsCollecting()) {

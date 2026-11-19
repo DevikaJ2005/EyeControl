@@ -5,6 +5,7 @@ import { GazeConfidence } from '../eyeTracking/GazeConfidence';
 import { DwellEngine } from '../interaction/DwellEngine';
 import { BlinkDetector } from '../interaction/BlinkDetector';
 import { HeadPointer } from '../headTracking/HeadPointer';
+import { HeadCalibration } from '../headTracking/HeadCalibration';
 import { EyeFeatureExtractor } from '../vision/EyeFeatureExtractor';
 import { HeadPoseEstimator } from '../vision/HeadPoseEstimator';
 import { CalibrationPoints } from '../calibration/CalibrationPoints';
@@ -238,12 +239,53 @@ describe('HeadPointer Dead Zone & Sensitivity Unit Tests', () => {
       neutralFaceY: 0.5,
     });
 
-    const pos = pointer.mapToScreen(
+    // Turning head to user's right (camera left: negative yaw) moves pointer right
+    const posRight = pointer.mapToScreen(
+      { yaw: -0.15, pitch: 0, roll: 0, translation: { x: 0, y: 0, z: 0 } },
+      1920,
+      1080
+    );
+    expect(posRight.x).toBeGreaterThan(960);
+
+    // Turning head to user's left moves pointer left
+    const posLeft = pointer.mapToScreen(
       { yaw: 0.15, pitch: 0, roll: 0, translation: { x: 0, y: 0, z: 0 } },
       1920,
       1080
     );
-    expect(pos.x).toBeGreaterThan(960);
+    expect(posLeft.x).toBeLessThan(960);
+
+    // Tilting head up moves pointer up
+    const posUp = pointer.mapToScreen(
+      { yaw: 0, pitch: 0.15, roll: 0, translation: { x: 0, y: 0, z: 0 } },
+      1920,
+      1080
+    );
+    expect(posUp.y).toBeLessThan(540);
+  });
+
+  it('collects neutral head posture samples and computes neutral pose accurately', () => {
+    const calib = new HeadCalibration();
+    calib.startRecording(10);
+    expect(calib.getIsCollecting()).toBe(true);
+    expect(calib.getProgress()).toBe(0);
+
+    for (let i = 0; i < 10; i++) {
+      calib.addSample({
+        yaw: 0.05,
+        pitch: -0.02,
+        roll: 0.01,
+        translation: { x: 0.48, y: 0.52, z: 0 },
+      });
+    }
+
+    expect(calib.getIsCollecting()).toBe(false);
+    expect(calib.getProgress()).toBe(1.0);
+
+    const neutral = calib.computeNeutralPose();
+    expect(neutral).not.toBeNull();
+    expect(neutral!.neutralYaw).toBeCloseTo(0.05, 3);
+    expect(neutral!.neutralPitch).toBeCloseTo(-0.02, 3);
   });
 });
 

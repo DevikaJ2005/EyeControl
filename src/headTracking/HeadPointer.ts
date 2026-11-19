@@ -48,9 +48,9 @@ export class HeadPointer {
     let deltaYaw = currentPose.yaw - this.neutralPose.neutralYaw;
     let deltaPitch = currentPose.pitch - this.neutralPose.neutralPitch;
 
-    // Invert yaw if mirrored (camera facing user: turning head to user's right moves nose right)
+    // Invert yaw because webcam camera faces the user: turning head to screen right moves face towards camera left
     // Adjust signs so user head movement matches intuitive screen direction
-    const directedYaw = deltaYaw;
+    const directedYaw = -deltaYaw;
     const directedPitch = -deltaPitch; // Looking up tilts nose up
 
     // 2. Apply dead zone

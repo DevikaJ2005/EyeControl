@@ -45,6 +45,9 @@ export const App: React.FC = () => {
   // Navigation & Settings State
   const [currentPage, setCurrentPage] = useState<ActivePage>('setup');
   const [settings, setSettings] = useState<UserAccessibilitySettings>(DEFAULT_SETTINGS);
+  const settingsRef = useRef<UserAccessibilitySettings>(DEFAULT_SETTINGS);
+  settingsRef.current = settings;
+
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isResting, setIsResting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -97,7 +100,9 @@ export const App: React.FC = () => {
         // Fast lighting diagnostic (throttled inside analyzeLighting)
         const lighting = CameraDiagnostics.analyzeLighting(video);
 
-        if (settings.inputMode === 'eye') {
+        const activeMode = settingsRef.current.inputMode;
+
+        if (activeMode === 'eye') {
           // If currently in calibration page and actively recording baseline, target or validation
           const calibState = calibrationManager.getState();
           if (
@@ -151,13 +156,22 @@ export const App: React.FC = () => {
           }
         } else {
           // Head tracking mode
+          const result = FaceLandmarkerService.getInstance().detectVideoFrame(video, timestamp);
+          if (result && result.faceLandmarks && result.faceLandmarks[0]) {
+            const diag = EyeFeatureExtractor.getDiagnosticOverlayData(result.faceLandmarks[0]);
+            setOverlayData(diag);
+          }
+
           const pred = headTracker.processFrame(video, timestamp);
           if (pred) {
             setCurrentPrediction(pred);
+            const isCalibrated = !!headTracker.getNeutralPose();
             cameraManager.updateVisionDiagnostics(
               !pred.confidence.isFaceLost,
               true,
-              lighting
+              lighting,
+              undefined,
+              isCalibrated ? 'validated_tracking' : 'calibration_required'
             );
             // Update selection engine with head pointer point
             selectionManager.update(
@@ -214,6 +228,11 @@ export const App: React.FC = () => {
     setSettings((prev) => ({ ...prev, inputMode: mode }));
     TrackingStateManager.getInstance().setMode(mode);
     AccessibilityManager.getInstance().updateSettings({ inputMode: mode });
+    if (mode === 'head') {
+      headTrackerRef.current?.start();
+    } else {
+      eyeTrackerRef.current?.start();
+    }
   };
 
   const handleToggleRest = () => {

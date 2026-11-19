@@ -54,9 +54,29 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({
   const [isCalibratingEye, setIsCalibratingEye] = useState(false);
 
   // Head calibration state
-  const [headStep, setHeadStep] = useState<'idle' | 'recording_neutral' | 'completed'>('idle');
+  const [headStep, setHeadStep] = useState<'idle' | 'recording_neutral' | 'completed'>(
+    headTracker.getNeutralPose() ? 'completed' : 'idle'
+  );
   const [headProgress, setHeadProgress] = useState(0);
-  const [neutralPose, setNeutralPose] = useState<HeadNeutralPose | null>(null);
+  const [neutralPose, setNeutralPose] = useState<HeadNeutralPose | null>(headTracker.getNeutralPose());
+  const [testedDirections, setTestedDirections] = useState<Record<string, boolean>>({
+    up: false,
+    down: false,
+    left: false,
+    right: false,
+  });
+
+  // Keep neutralPose synced if headTracker has it
+  useEffect(() => {
+    if (mode === 'head') {
+      headTracker.start();
+      const existing = headTracker.getNeutralPose();
+      if (existing) {
+        setNeutralPose(existing);
+        setHeadStep('completed');
+      }
+    }
+  }, [mode, headTracker]);
 
   // Subscribe to eye calibration manager
   useEffect(() => {
@@ -106,8 +126,9 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({
   const startHeadCalibration = () => {
     setHeadStep('recording_neutral');
     setHeadProgress(0);
+    headTracker.start(); // Ensure head tracking inference loop is running
     const headCalib = headTracker.getCalibration();
-    headCalib.startRecording(25);
+    headCalib.startRecording(30);
 
     const interval = setInterval(() => {
       const prog = headCalib.getProgress();
@@ -126,7 +147,7 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({
           setHeadStep('idle');
         }
       }
-    }, 50);
+    }, 40);
   };
 
   // Export calibration and validation telemetry as JSON
@@ -600,111 +621,193 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({
         </div>
       ) : (
         /* Head Mode Calibration Panel */
-        <div
-          style={{
-            backgroundColor: 'var(--surface)',
-            borderRadius: 'var(--radius-lg)',
-            border: '2px solid var(--border)',
-            padding: '32px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '24px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div
-              style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--surface-blue)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--primary)',
-              }}
-            >
-              <Compass size={28} />
-            </div>
-            <div>
-              <h2 style={{ fontSize: 'var(--font-size-lg)', color: 'var(--text-primary)' }}>
-                Neutral Head Posture Calibration
-              </h2>
-              <p style={{ fontSize: 'var(--font-size-base)', color: 'var(--text-secondary)' }}>
-                Face the center of your screen in a relaxed, comfortable position.
-              </p>
-            </div>
-          </div>
-
-          {headStep === 'recording_neutral' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ fontWeight: 600 }}>Recording Neutral Head Position... Keep Still</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '24px', alignItems: 'start' }}>
+          <div
+            style={{
+              backgroundColor: 'var(--surface)',
+              borderRadius: 'var(--radius-lg)',
+              border: '2px solid var(--border)',
+              padding: '32px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '24px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div
                 style={{
-                  width: '100%',
-                  height: '12px',
-                  backgroundColor: 'var(--border)',
-                  borderRadius: '6px',
-                  overflow: 'hidden',
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--surface-blue)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--primary)',
                 }}
               >
-                <div
-                  style={{
-                    width: `${Math.round(headProgress * 100)}%`,
-                    height: '100%',
-                    backgroundColor: 'var(--primary)',
-                    transition: 'width 60ms linear',
-                  }}
-                />
+                <Compass size={28} />
               </div>
-            </div>
-          )}
-
-          {headStep === 'completed' && (
-            <div
-              style={{
-                padding: '16px',
-                backgroundColor: 'var(--surface-sage)',
-                borderRadius: 'var(--radius-md)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-              }}
-            >
-              <CheckCircle size={24} color="#42685A" />
               <div>
-                <strong>Neutral Head Position Recorded!</strong>
-                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                  Gentle head tilts up, down, left and right will now navigate the pointer.
+                <h2 style={{ fontSize: 'var(--font-size-lg)', color: 'var(--text-primary)' }}>
+                  Neutral Head Posture Calibration
+                </h2>
+                <p style={{ fontSize: 'var(--font-size-base)', color: 'var(--text-secondary)' }}>
+                  Sit in your natural resting posture looking at the screen center, then click Set Neutral Posture.
                 </p>
               </div>
             </div>
-          )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <DwellButton
-              id="btn-record-head-neutral"
-              onClick={startHeadCalibration}
-              variant="primary"
-              size="large"
-              ariaLabel="Record Neutral Head Position"
-            >
-              <Compass size={22} />
-              <span>{neutralPose ? 'Recalibrate Neutral Posture' : 'Set Neutral Posture'}</span>
-            </DwellButton>
-
-            {headStep === 'completed' && (
-              <DwellButton
-                id="btn-head-goto-home"
-                onClick={onNavigateHome}
-                variant="sage"
-                size="large"
-                ariaLabel="Proceed to Home screen"
-              >
-                <span>Go to Home Screen</span>
-                <ArrowRight size={22} />
-              </DwellButton>
+            {headStep === 'recording_neutral' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ fontWeight: 600, color: 'var(--primary)' }}>
+                  Recording Neutral Head Position... Keep Your Head Still
+                </div>
+                <div
+                  style={{
+                    width: '100%',
+                    height: '14px',
+                    backgroundColor: 'var(--border)',
+                    borderRadius: '7px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.round(headProgress * 100)}%`,
+                      height: '100%',
+                      backgroundColor: 'var(--primary)',
+                      transition: 'width 60ms linear',
+                    }}
+                  />
+                </div>
+              </div>
             )}
+
+            {neutralPose && (
+              <div
+                style={{
+                  padding: '16px',
+                  backgroundColor: 'var(--surface-sage)',
+                  borderRadius: 'var(--radius-md)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                }}
+              >
+                <CheckCircle size={24} color="#42685A" />
+                <div>
+                  <strong>Neutral Head Posture Calibrated!</strong>
+                  <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    Center calibrated at Yaw: {(neutralPose.neutralYaw * 57.3).toFixed(1)}°, Pitch: {(neutralPose.neutralPitch * 57.3).toFixed(1)}°. Gentle head tilts will now guide the cursor.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Interactive Head Direction Verification Area */}
+            {neutralPose && (
+              <div
+                style={{
+                  padding: '20px',
+                  backgroundColor: 'var(--background)',
+                  borderRadius: 'var(--radius-md)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '14px',
+                }}
+              >
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+                  Interactive Direction Test: Tilt head to dwell on any target below
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                  <DwellButton
+                    id="test-head-up"
+                    onClick={() => setTestedDirections(prev => ({ ...prev, up: true }))}
+                    variant={testedDirections.up ? 'primary' : 'surface'}
+                    size="normal"
+                    ariaLabel="Test head tilt up"
+                    style={{ minHeight: '60px', flexDirection: 'column', gap: '4px' }}
+                  >
+                    <span>Tilt UP</span>
+                    <span style={{ fontSize: '0.75rem' }}>{testedDirections.up ? '✓ Tested' : 'Try tilt'}</span>
+                  </DwellButton>
+
+                  <DwellButton
+                    id="test-head-down"
+                    onClick={() => setTestedDirections(prev => ({ ...prev, down: true }))}
+                    variant={testedDirections.down ? 'primary' : 'surface'}
+                    size="normal"
+                    ariaLabel="Test head tilt down"
+                    style={{ minHeight: '60px', flexDirection: 'column', gap: '4px' }}
+                  >
+                    <span>Tilt DOWN</span>
+                    <span style={{ fontSize: '0.75rem' }}>{testedDirections.down ? '✓ Tested' : 'Try tilt'}</span>
+                  </DwellButton>
+
+                  <DwellButton
+                    id="test-head-left"
+                    onClick={() => setTestedDirections(prev => ({ ...prev, left: true }))}
+                    variant={testedDirections.left ? 'primary' : 'surface'}
+                    size="normal"
+                    ariaLabel="Test head tilt left"
+                    style={{ minHeight: '60px', flexDirection: 'column', gap: '4px' }}
+                  >
+                    <span>Tilt LEFT</span>
+                    <span style={{ fontSize: '0.75rem' }}>{testedDirections.left ? '✓ Tested' : 'Try tilt'}</span>
+                  </DwellButton>
+
+                  <DwellButton
+                    id="test-head-right"
+                    onClick={() => setTestedDirections(prev => ({ ...prev, right: true }))}
+                    variant={testedDirections.right ? 'primary' : 'surface'}
+                    size="normal"
+                    ariaLabel="Test head tilt right"
+                    style={{ minHeight: '60px', flexDirection: 'column', gap: '4px' }}
+                  >
+                    <span>Tilt RIGHT</span>
+                    <span style={{ fontSize: '0.75rem' }}>{testedDirections.right ? '✓ Tested' : 'Try tilt'}</span>
+                  </DwellButton>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <DwellButton
+                id="btn-record-head-neutral"
+                onClick={startHeadCalibration}
+                variant="primary"
+                size="large"
+                ariaLabel="Record Neutral Head Position"
+              >
+                <Compass size={22} />
+                <span>{neutralPose ? 'Recalibrate Neutral Posture' : 'Set Neutral Posture'}</span>
+              </DwellButton>
+
+              {neutralPose && (
+                <DwellButton
+                  id="btn-head-goto-home"
+                  onClick={onNavigateHome}
+                  variant="sage"
+                  size="large"
+                  ariaLabel="Proceed to Home screen"
+                >
+                  <span>Go to Home Screen</span>
+                  <ArrowRight size={22} />
+                </DwellButton>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Live Camera Preview in Head Mode */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <CameraPreviewOverlay
+              videoElement={videoElement}
+              diagnosticInfo={diagnosticInfo}
+              overlayData={overlayData}
+              mode="thumbnail"
+            />
           </div>
         </div>
       )}
