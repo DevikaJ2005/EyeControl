@@ -1,0 +1,58 @@
+/* EyeControl Accessible Design Tokens */
+:root {
+  --background: #EEF0E9;
+  --surface: #F7F6F0;
+  --surface-sage: #DCE7DE;
+  --surface-blue: #DDE6E8;
+  --surface-sand: #EAE2D6;
+
+  --primary: #42685A;
+  --primary-hover: #355649;
+  --primary-active: #2a453b;
+
+  --text-primary: #283831;
+  --text-secondary: #56675F;
+  --text-muted: #72847c;
+  --text-inverse: #F7F6F0;
+
+  --border: #D2DAD2;
+  --border-strong: #B8C4B8;
+
+  --focus: #426F5D;
+  --focus-ring: rgba(66, 111, 93, 0.45);
+  --focus-progress: #355649;
+
+  --emergency: #A75B51;
+  --emergency-hover: #8e473e;
+  --emergency-surface: #F0DCD7;
+  --emergency-border: #D8ACA4;
+
+  --font-family: 'Atkinson Hyperlegible', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  /* Typography scale */
+  --font-size-sm: 1rem;       /* 16px */
+  --font-size-base: 1.1875rem; /* ~19px */
+  --font-size-md: 1.375rem;   /* ~22px */
+  --font-size-lg: 1.625rem;   /* ~26px */
+  --font-size-xl: 2.125rem;   /* ~34px */
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-full: 9999px;
+
+  --shadow-subtle: 0 2px 8px rgba(40, 56, 49, 0.05);
+  --shadow-active: 0 4px 16px rgba(40, 56, 49, 0.12);
+
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
