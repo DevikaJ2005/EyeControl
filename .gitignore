@@ -1,0 +1,43 @@
+# Python virtual environment
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Large model binaries (track JSON only, not joblib)
+models/*.joblib
+models/*.pkl
+
+# Matplotlib cache
+__pycache__/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+
+# Data — raw downloads (large, registered-access only)
+# Keep benchmark CSV but exclude large real datasets
+data/raw/MPIIGaze/
+data/raw/MPIIFaceGaze/
+data/raw/GazeCapture/
+data/raw/EYEDIAP/
+
+# Keep these tracked
+!data/raw/mpiigaze_sample_features.csv
+!data/processed/
+!models/*.json
+!models/*.png
