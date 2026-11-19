@@ -9,6 +9,7 @@ import { CalibrationSample, EyeFeatureVector, Point2D, CalibrationResult, Valida
 import { RidgeRegression } from './RidgeRegression';
 import { EyeFeatureExtractor } from '../vision/EyeFeatureExtractor';
 import { CoordinateManager } from '../calibration/CoordinateManager';
+import { PRETRAINED_GAZE_PRIOR } from './PretrainedWeights';
 
 interface CandidateConfig {
   name: string;
@@ -27,9 +28,23 @@ export class GazeModel {
   private bestModelName: string = 'Ridge (L2=0.01)';
   private bestCvScore: number = 0;
 
-  constructor(lambda: number = 0.01, degree: number = 1) {
+  constructor(lambda: number = 0.01, degree: number = 1, loadPrior: boolean = false) {
     this.modelX = new RidgeRegression(lambda, degree);
     this.modelY = new RidgeRegression(lambda, degree);
+    if (loadPrior) {
+      this.loadPretrainedPrior();
+    }
+  }
+
+  /**
+   * Loads the pre-trained offline Ridge Regression baseline prior from EyeControl ML Lab.
+   * Provides coarse gaze estimation before the user completes personalized calibration.
+   */
+  public loadPretrainedPrior(): void {
+    this.modelX.loadModel(PRETRAINED_GAZE_PRIOR.weightsX, PRETRAINED_GAZE_PRIOR.interceptX, PRETRAINED_GAZE_PRIOR.normalizer);
+    this.modelY.loadModel(PRETRAINED_GAZE_PRIOR.weightsY, PRETRAINED_GAZE_PRIOR.interceptY, PRETRAINED_GAZE_PRIOR.normalizer);
+    this.isTrained = true;
+    this.bestModelName = 'Pretrained Ridge Prior (ML Lab)';
   }
 
   public setCentralBaseline(baseline: CentralBaselineData | null): void {
