@@ -256,9 +256,17 @@ describe('HeadPointer Dead Zone & Sensitivity Unit Tests', () => {
     );
     expect(posLeft.x).toBeLessThan(960);
 
-    // Tilting head up moves pointer up
-    const posUp = pointer.mapToScreen(
+    // Tilting head down (+pitch) moves pointer down (>540)
+    const posDown = pointer.mapToScreen(
       { yaw: 0, pitch: 0.15, roll: 0, translation: { x: 0, y: 0, z: 0 } },
+      1920,
+      1080
+    );
+    expect(posDown.y).toBeGreaterThan(540);
+
+    // Tilting head up (-pitch) moves pointer up (<540)
+    const posUp = pointer.mapToScreen(
+      { yaw: 0, pitch: -0.15, roll: 0, translation: { x: 0, y: 0, z: 0 } },
       1920,
       1080
     );

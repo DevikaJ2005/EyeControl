@@ -90,11 +90,11 @@ export class HeadPoseEstimator {
     // Map ratio to angle approximation in radians
     const yaw = Math.asin(Math.max(-0.95, Math.min(0.95, yawRatio)));
 
-    // Pitch: Nose vertical offset from forehead-chin line
+    // Pitch: Nose vertical offset from forehead-chin line (tilting head down moves nose down, positive pitch)
     const faceMidY = (forehead.y + chin.y) / 2;
     const faceSpanY = Math.abs(chin.y - forehead.y);
     const pitchRatio = faceSpanY > 1e-4 ? (nose.y - faceMidY) / (faceSpanY / 2) : 0;
-    const pitch = -Math.asin(Math.max(-0.95, Math.min(0.95, pitchRatio)));
+    const pitch = Math.asin(Math.max(-0.95, Math.min(0.95, pitchRatio)));
 
     const translation: Point3D = {
       x: (leftCheek.x + rightCheek.x) / 2,

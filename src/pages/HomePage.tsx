@@ -124,7 +124,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
               Read & Watch
             </h2>
             <p style={{ fontSize: 'var(--font-size-base)', color: 'var(--text-secondary)', marginTop: '6px', fontWeight: 400 }}>
-              Listen to news articles and watch curated videos.
+              India Today news with audio reader and in-app YouTube videos.
             </p>
           </div>
         </DwellButton>
