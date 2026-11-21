@@ -208,6 +208,23 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({
         }}
         aria-live="assertive"
       >
+        {/* Always-Accessible Hands-Free Abort & Return Home DwellButton */}
+        <div style={{ position: 'absolute', top: '16px', left: '16px', zIndex: 10001 }}>
+          <DwellButton
+            id="btn-fullscreen-abort-calib"
+            onClick={() => {
+              calibrationManager.cancel();
+              setIsCalibratingEye(false);
+              onNavigateHome();
+            }}
+            variant="emergency"
+            size="normal"
+            ariaLabel="Abort calibration and return to Home"
+          >
+            <span>Abort & Return Home 🏠</span>
+          </DwellButton>
+        </div>
+
         {/* Instruction and Progress Banner */}
         <div
           style={{
@@ -419,15 +436,28 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({
         gap: '32px',
       }}
     >
-      <div>
-        <h1 style={{ fontSize: 'var(--font-size-xl)', color: 'var(--text-primary)', marginBottom: '8px' }}>
-          {mode === 'eye' ? 'Eye-Gaze Calibration' : 'Head-Movement Calibration'}
-        </h1>
-        <p style={{ fontSize: 'var(--font-size-base)', color: 'var(--text-secondary)' }}>
-          {mode === 'eye'
-            ? 'We will set your central baseline, calibrate 9 points across your screen, and independently test accuracy on 5 validation targets.'
-            : 'We will record your comfortable resting head posture as neutral center.'}
-        </p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ fontSize: 'var(--font-size-xl)', color: 'var(--text-primary)', marginBottom: '8px' }}>
+            {mode === 'eye' ? 'Eye-Gaze Calibration' : 'Head-Movement Calibration'}
+          </h1>
+          <p style={{ fontSize: 'var(--font-size-base)', color: 'var(--text-secondary)', margin: 0 }}>
+            {mode === 'eye'
+              ? 'We will set your central baseline, calibrate 9 points across your screen, and independently test accuracy on 5 validation targets.'
+              : 'We will record your comfortable resting head posture as neutral center.'}
+          </p>
+        </div>
+
+        <DwellButton
+          id="btn-calib-return-home-header"
+          onClick={onNavigateHome}
+          variant="sage"
+          size="normal"
+          ariaLabel="Return to Home screen"
+          style={{ minHeight: '52px', padding: '10px 20px' }}
+        >
+          <span>Return Home 🏠</span>
+        </DwellButton>
       </div>
 
       {mode === 'eye' ? (

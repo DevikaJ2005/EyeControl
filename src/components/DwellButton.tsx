@@ -18,6 +18,7 @@ interface DwellButtonProps {
   variant?: 'primary' | 'surface' | 'emergency' | 'ghost' | 'sage';
   size?: 'normal' | 'large' | 'card';
   ariaLabel?: string;
+  allowInRestMode?: boolean;
 }
 
 export const DwellButton: React.FC<DwellButtonProps> = ({
@@ -30,6 +31,7 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
   variant = 'surface',
   size = 'normal',
   ariaLabel,
+  allowInRestMode = false,
 }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [progress, setProgress] = useState(0);
@@ -53,6 +55,7 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
       },
       label: ariaLabel || (typeof children === 'string' ? children : id),
       disabled,
+      allowInRestMode,
     });
 
     // Listen to dwell progress updates
@@ -70,7 +73,7 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
       unregister();
       unsubscribeDwell();
     };
-  }, [id, onClick, disabled, ariaLabel, children]);
+  }, [id, onClick, disabled, ariaLabel, children, allowInRestMode]);
 
   // Variant styling classes
   const getVariantStyles = () => {

@@ -24,6 +24,10 @@ import {
   Youtube,
   Radio,
   Plus,
+  Shield,
+  ShieldCheck,
+  Home,
+  XCircle,
 } from 'lucide-react';
 
 interface NewsArticle {
@@ -152,11 +156,16 @@ function extractYouTubeEmbedUrl(input: string): string {
   return trimmed;
 }
 
-export const ExplorePage: React.FC = () => {
+interface ExplorePageProps {
+  onNavigateHome?: () => void;
+}
+
+export const ExplorePage: React.FC<ExplorePageProps> = ({ onNavigateHome }) => {
   const [activeTab, setActiveTab] = useState<'news' | 'videos'>('news');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [selectedVideo, setSelectedVideo] = useState<CuratedVideo | null>(null);
+  const [isGazeShieldActive, setIsGazeShieldActive] = useState(true);
 
   // Audio Reading State
   const [isReadingAloud, setIsReadingAloud] = useState(false);
@@ -590,18 +599,35 @@ export const ExplorePage: React.FC = () => {
               padding: '16px 24px',
               borderRadius: 'var(--radius-lg)',
               border: '2px solid var(--border)',
+              gap: '12px',
+              flexWrap: 'wrap',
             }}
           >
-            <DwellButton
-              id="article-btn-back"
-              onClick={() => setSelectedArticle(null)}
-              variant="sage"
-              size="normal"
-              ariaLabel="Back to headlines list"
-            >
-              <ArrowLeft size={20} />
-              <span>Back to Headlines</span>
-            </DwellButton>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <DwellButton
+                id="article-btn-back"
+                onClick={() => setSelectedArticle(null)}
+                variant="sage"
+                size="normal"
+                ariaLabel="Back to headlines list"
+              >
+                <ArrowLeft size={20} />
+                <span>Back to Headlines</span>
+              </DwellButton>
+
+              {onNavigateHome && (
+                <DwellButton
+                  id="article-btn-home"
+                  onClick={onNavigateHome}
+                  variant="surface"
+                  size="normal"
+                  ariaLabel="Return to Home screen"
+                >
+                  <Home size={20} />
+                  <span>Home</span>
+                </DwellButton>
+              )}
+            </div>
 
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
               <span
@@ -867,35 +893,63 @@ export const ExplorePage: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* SECTION D: IN-APP EMBEDDED YOUTUBE PLAYER VIEW                            */}
+      {/* SECTION D: IN-APP EMBEDDED YOUTUBE PLAYER VIEW (ASSISTIVE SHIELD PROTECTED)*/}
       {/* ========================================================================= */}
       {selectedVideo && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <DwellButton
-              id="video-btn-back"
-              onClick={() => setSelectedVideo(null)}
-              variant="sage"
-              size="normal"
-              ariaLabel="Back to video list"
-            >
-              <ArrowLeft size={20} />
-              <span>Back to Video Library</span>
-            </DwellButton>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span
-                style={{
-                  fontSize: '0.85rem',
-                  fontWeight: 700,
-                  color: '#fff',
-                  backgroundColor: '#E53935',
-                  padding: '4px 12px',
-                  borderRadius: 'var(--radius-full)',
-                }}
+          {/* Top Assistive Navigation & Control Bar */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: 'var(--surface)',
+              padding: '16px 24px',
+              borderRadius: 'var(--radius-lg)',
+              border: '2px solid var(--border)',
+              gap: '12px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <DwellButton
+                id="video-btn-close-top"
+                onClick={() => setSelectedVideo(null)}
+                variant="emergency"
+                size="large"
+                ariaLabel="Close video and back to video list"
+                style={{ minHeight: '60px', padding: '12px 24px', fontWeight: 700 }}
               >
-                Playing In-App (No Tab Switching)
-              </span>
+                <XCircle size={22} />
+                <span>Close Video</span>
+              </DwellButton>
+
+              {onNavigateHome && (
+                <DwellButton
+                  id="video-btn-home-top"
+                  onClick={onNavigateHome}
+                  variant="sage"
+                  size="large"
+                  ariaLabel="Return to Home screen"
+                  style={{ minHeight: '60px', padding: '12px 22px' }}
+                >
+                  <Home size={22} />
+                  <span>Return Home</span>
+                </DwellButton>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <DwellButton
+                id="video-btn-shield-toggle"
+                onClick={() => setIsGazeShieldActive(!isGazeShieldActive)}
+                variant={isGazeShieldActive ? 'primary' : 'surface'}
+                size="normal"
+                ariaLabel="Toggle gaze click shield for video player"
+              >
+                {isGazeShieldActive ? <ShieldCheck size={20} /> : <Shield size={20} />}
+                <span>{isGazeShieldActive ? 'Gaze Shield Active 🛡️' : 'Shield Off (Touch Active)'}</span>
+              </DwellButton>
             </div>
           </div>
 
@@ -903,7 +957,7 @@ export const ExplorePage: React.FC = () => {
             {selectedVideo.title}
           </h2>
 
-          {/* Embedded Responsive 16:9 YouTube iFrame */}
+          {/* Embedded Responsive 16:9 YouTube iFrame with Assistive Trap Shield */}
           <div
             style={{
               position: 'relative',
@@ -912,7 +966,7 @@ export const ExplorePage: React.FC = () => {
               backgroundColor: '#000',
               borderRadius: 'var(--radius-lg)',
               overflow: 'hidden',
-              border: '3px solid var(--border)',
+              border: isGazeShieldActive ? '4px solid var(--primary)' : '3px solid var(--border)',
               boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
             }}
           >
@@ -926,15 +980,83 @@ export const ExplorePage: React.FC = () => {
                 width: '100%',
                 height: '100%',
                 border: 0,
+                pointerEvents: isGazeShieldActive ? 'none' : 'auto',
               }}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
+
+            {isGazeShieldActive && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '12px',
+                  right: '12px',
+                  backgroundColor: 'rgba(20, 32, 28, 0.85)',
+                  color: '#8CE4B2',
+                  padding: '6px 14px',
+                  borderRadius: 'var(--radius-full)',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  pointerEvents: 'none',
+                  zIndex: 10,
+                }}
+              >
+                <ShieldCheck size={16} />
+                <span>Protected Gaze Mode</span>
+              </div>
+            )}
           </div>
 
-          <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            {selectedVideo.description}
-          </p>
+          {/* Bottom Mirror Controls so user is never trapped when looking down */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: 'var(--surface)',
+              padding: '16px 24px',
+              borderRadius: 'var(--radius-lg)',
+              border: '2px solid var(--border)',
+              gap: '12px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <DwellButton
+                id="video-btn-close-bottom"
+                onClick={() => setSelectedVideo(null)}
+                variant="emergency"
+                size="large"
+                ariaLabel="Close video and back to video list"
+                style={{ minHeight: '60px', padding: '12px 24px', fontWeight: 700 }}
+              >
+                <XCircle size={22} />
+                <span>Close Video</span>
+              </DwellButton>
+
+              {onNavigateHome && (
+                <DwellButton
+                  id="video-btn-home-bottom"
+                  onClick={onNavigateHome}
+                  variant="sage"
+                  size="large"
+                  ariaLabel="Return to Home screen"
+                  style={{ minHeight: '60px', padding: '12px 22px' }}
+                >
+                  <Home size={22} />
+                  <span>Return Home</span>
+                </DwellButton>
+              )}
+            </div>
+
+            <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', margin: 0, maxWidth: '500px' }}>
+              {selectedVideo.description}
+            </p>
+          </div>
         </div>
       )}
     </div>

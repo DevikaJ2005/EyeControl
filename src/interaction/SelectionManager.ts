@@ -71,18 +71,64 @@ export class SelectionManager {
     this.soundFeedbackEnabled = enabled;
   }
 
+  public reset(): void {
+    this.targets.clear();
+    this.isRestModeActive = false;
+    this.isReadingModeActive = false;
+    this.dwellEngine.setOnSelect((targetId) => this.handleTargetSelected(targetId));
+    this.dwellEngine.cancel();
+  }
+
   /**
    * Process current focus point and evaluate dwell selection
    */
-  public update(point: Point2D, confidence: GazeConfidenceResult): void {
-    if (this.isRestModeActive) {
+  public update(point: Point2D, confidence: GazeConfidenceResult, now: number = performance.now()): void {
+    // Emergency corner abort: Looking at top corners (within 60px) cancels ongoing dwell
+    const isCornerAbort =
+      (point.y <= 60 && (point.x <= 60 || (typeof window !== 'undefined' && point.x >= window.innerWidth - 60)));
+
+    if (isCornerAbort) {
       this.dwellEngine.cancel();
+      return;
+    }
+
+    if (this.isRestModeActive) {
+      // In Rest Mode, only allow hovering and dwelling on explicit wake/resume targets
+      const wakeTargetId = this.findRestModeTarget(point);
+      if (wakeTargetId) {
+        this.dwellEngine.update(wakeTargetId, confidence, now);
+      } else {
+        this.dwellEngine.cancel();
+      }
       return;
     }
 
     // Hit test against registered targets
     const hoveredTargetId = this.findHoveredTarget(point);
-    this.dwellEngine.update(hoveredTargetId, confidence);
+    this.dwellEngine.update(hoveredTargetId, confidence, now);
+  }
+
+  /**
+   * Targets accessible while resting (Wake Up button or Toggle Rest)
+   */
+  private findRestModeTarget(point: Point2D): string | null {
+    for (const [id, target] of this.targets.entries()) {
+      if (target.disabled) continue;
+      if (!target.allowInRestMode && id !== 'btn-wake-up' && id !== 'btn-toggle-rest') continue;
+
+      if (target.element) {
+        const rect = target.element.getBoundingClientRect();
+        if (
+          point.x >= rect.left &&
+          point.x <= rect.right &&
+          point.y >= rect.top &&
+          point.y <= rect.bottom
+        ) {
+          return id;
+        }
+      }
+    }
+    return null;
   }
 
   private findHoveredTarget(point: Point2D): string | null {

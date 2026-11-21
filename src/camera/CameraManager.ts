@@ -195,7 +195,8 @@ export class CameraManager {
     eyeRegionsClear: boolean,
     lighting: 'good' | 'low' | 'harsh',
     faceBox?: { x: number; y: number; width: number; height: number },
-    status?: any
+    status?: any,
+    reason?: string
   ): void {
     const trackingLost = !faceDetected || !eyeRegionsClear;
     let changed = false;
@@ -205,7 +206,8 @@ export class CameraManager {
       this.diagnosticInfo.eyeRegionsClear !== eyeRegionsClear ||
       this.diagnosticInfo.trackingLost !== trackingLost ||
       this.diagnosticInfo.lightingQuality !== lighting ||
-      this.diagnosticInfo.systemStatus !== status
+      this.diagnosticInfo.systemStatus !== status ||
+      this.diagnosticInfo.diagnosticReason !== reason
     ) {
       changed = true;
     }
@@ -216,6 +218,7 @@ export class CameraManager {
     this.diagnosticInfo.lightingQuality = lighting;
     if (faceBox) this.diagnosticInfo.faceBox = faceBox;
     if (status) this.diagnosticInfo.systemStatus = status;
+    if (reason !== undefined) this.diagnosticInfo.diagnosticReason = reason;
 
     if (changed) {
       this.notifyStatus();

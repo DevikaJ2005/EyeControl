@@ -111,7 +111,21 @@ export class GazeConfidence {
       };
     }
 
-    // 4. Out of bounds check: predicted point must be within valid viewport margins
+    // 4. Gaze calibration status check: must be calibrated before checking boundary violations
+    if (!isCalibrationValidated) {
+      return {
+        confidence: 0.3,
+        isReliable: false,
+        reason: 'Calibration required before tracking',
+        isBlinking: false,
+        isFaceLost: false,
+        isPoseExtreme: false,
+        isOutOfBounds: false,
+        systemStatus: 'calibration_required',
+      };
+    }
+
+    // 5. Out of bounds check: predicted point must be within valid viewport margins
     let isOutOfBounds = false;
     if (predictedNormPos) {
       if (!CoordinateManager.isWithinBounds(predictedNormPos, this.thresholds.maxScreenMarginFactor)) {
@@ -129,20 +143,6 @@ export class GazeConfidence {
         isPoseExtreme: false,
         isOutOfBounds: true,
         systemStatus: 'temporarily_unavailable',
-      };
-    }
-
-    // 5. Gaze calibration status check
-    if (!isCalibrationValidated) {
-      return {
-        confidence: 0.3,
-        isReliable: false,
-        reason: 'Calibration required before tracking',
-        isBlinking: false,
-        isFaceLost: false,
-        isPoseExtreme: false,
-        isOutOfBounds: false,
-        systemStatus: 'calibration_required',
       };
     }
 

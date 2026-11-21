@@ -1,13 +1,15 @@
 /**
  * CameraStatus
  * Header navigation bar with tracking health indicators, input mode badge,
+ * always-accessible Emergency Return Home dwell button, Cancel Action mechanism,
  * Rest/Pause dwell control, and Settings toggle.
  */
 
 import React from 'react';
-import { CameraDiagnosticInfo, InputMode, TrackingSystemStatus } from '../types/tracking';
+import { CameraDiagnosticInfo, InputMode } from '../types/tracking';
 import { DwellButton } from './DwellButton';
-import { Settings, Eye, Compass, Moon, Play, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { SelectionManager } from '../interaction/SelectionManager';
+import { Settings, Eye, Compass, Moon, Play, Home, AlertTriangle, XCircle } from 'lucide-react';
 
 interface CameraStatusProps {
   diagnosticInfo: CameraDiagnosticInfo;
@@ -17,6 +19,7 @@ interface CameraStatusProps {
   onToggleRest: () => void;
   onOpenSettings: () => void;
   onNavigateHome?: () => void;
+  onCancelAction?: () => void;
   showBackHome?: boolean;
   isCalibrated?: boolean;
 }
@@ -29,6 +32,7 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
   onToggleRest,
   onOpenSettings,
   onNavigateHome,
+  onCancelAction,
   showBackHome = false,
   isCalibrated = false,
 }) => {
@@ -67,7 +71,7 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
     statusText = 'Validation failed';
     statusColor = '#A75B51';
   } else if (diagnosticInfo.systemStatus === 'temporarily_unavailable') {
-    statusText = 'Tracking temporarily unavailable';
+    statusText = diagnosticInfo.diagnosticReason || 'Tracking temporarily unavailable';
     statusColor = '#C48324';
   } else if (diagnosticInfo.faceDetected && diagnosticInfo.eyeRegionsClear && isCalibrated) {
     statusText = isFpsLow ? `Tracking Validated (${fps} FPS — Slow)` : `Tracking Validated (${fps || 30} FPS)`;
@@ -78,6 +82,13 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
     statusColor = '#42685A';
     statusBg = 'var(--surface-sage)';
   }
+
+  const handleCancel = () => {
+    SelectionManager.getInstance().cancel();
+    if (onCancelAction) {
+      onCancelAction();
+    }
+  };
 
   return (
     <header
@@ -91,23 +102,48 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
         minHeight: '72px',
         gap: '16px',
         zIndex: 100,
+        position: 'relative',
       }}
     >
-      {/* Left: Brand + Optional Back Navigation */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      {/* Left: Brand + Always-Accessible Return Home */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
         {showBackHome && onNavigateHome && (
           <DwellButton
-            id="nav-back-home"
+            id="nav-emergency-home"
             onClick={onNavigateHome}
             size="normal"
-            variant="sage"
-            ariaLabel="Return to Home screen"
-            style={{ minHeight: '52px', padding: '10px 18px' }}
+            variant="emergency"
+            ariaLabel="Emergency return to Home screen"
+            style={{
+              minHeight: '52px',
+              padding: '10px 18px',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
           >
-            <ArrowLeft size={22} />
-            <span>Home</span>
+            <Home size={22} />
+            <span>Emergency Home</span>
           </DwellButton>
         )}
+
+        {/* Global Cancel / Abort Current Dwell */}
+        <DwellButton
+          id="btn-emergency-cancel"
+          onClick={handleCancel}
+          size="normal"
+          variant="ghost"
+          ariaLabel="Cancel current dwell action"
+          style={{
+            minHeight: '52px',
+            padding: '10px 14px',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          <XCircle size={20} />
+          <span>Cancel Dwell</span>
+        </DwellButton>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
@@ -141,12 +177,16 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
-          padding: '6px 16px',
+          padding: '6px 18px',
           borderRadius: 'var(--radius-full)',
           backgroundColor: statusBg,
           border: '1px solid var(--border)',
           fontSize: '0.95rem',
           fontWeight: 600,
+          maxWidth: '380px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
         }}
         aria-live="polite"
       >
@@ -157,11 +197,12 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
             borderRadius: '50%',
             backgroundColor: statusColor,
             display: 'inline-block',
+            flexShrink: 0,
           }}
         />
-        <span>{statusText}</span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{statusText}</span>
         {isFpsLow && (
-          <span title="Low frame rate warning">
+          <span title="Low frame rate warning" style={{ flexShrink: 0 }}>
             <AlertTriangle size={15} color="#C48324" />
           </span>
         )}
@@ -172,6 +213,7 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
         <DwellButton
           id="btn-toggle-rest"
           onClick={onToggleRest}
+          allowInRestMode={true}
           variant={isResting ? 'primary' : 'surface'}
           size="normal"
           ariaLabel={isResting ? 'Resume tracking' : 'Pause and rest eyes'}

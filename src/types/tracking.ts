@@ -109,6 +109,7 @@ export interface CameraDiagnosticInfo {
   lightingQuality: 'good' | 'low' | 'harsh' | 'unknown';
   faceBox?: FaceBoundingBox;
   systemStatus?: TrackingSystemStatus;
+  diagnosticReason?: string;
 }
 
 export interface NormalizedLandmark {
@@ -281,6 +282,7 @@ export interface DwellTarget {
   label: string;
   disabled?: boolean;
   isArticleReadingArea?: boolean; // When true, locked out from dwell selection
+  allowInRestMode?: boolean; // When true, can still be dwelled upon during Rest Mode (e.g. Wake Up button)
 }
 
 export type DwellState = 'idle' | 'hovering' | 'dwelling' | 'selected' | 'rearming';
@@ -299,4 +301,5 @@ export interface UserAccessibilitySettings {
   emergencyContactPhone: string;
   reducedMotion: boolean;
   soundFeedback: boolean;
+  soundFeedbackEnabled?: boolean;
 }

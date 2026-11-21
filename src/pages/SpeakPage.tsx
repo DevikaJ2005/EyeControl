@@ -7,7 +7,7 @@
 import React, { useState } from 'react';
 import { DwellButton } from '../components/DwellButton';
 import { SpeechEngine } from '../speech/SpeechEngine';
-import { Volume2, RotateCcw, Delete, MessageSquare } from 'lucide-react';
+import { Volume2, RotateCcw, Delete, MessageSquare, Home } from 'lucide-react';
 
 interface AACCategory {
   id: string;
@@ -43,7 +43,11 @@ const AAC_CATEGORIES: AACCategory[] = [
   },
 ];
 
-export const SpeakPage: React.FC = () => {
+interface SpeakPageProps {
+  onNavigateHome?: () => void;
+}
+
+export const SpeakPage: React.FC<SpeakPageProps> = ({ onNavigateHome }) => {
   const [activeCategory, setActiveCategory] = useState<string>('basic');
   const [currentMessage, setCurrentMessage] = useState<string>('');
   const speechEngine = SpeechEngine.getInstance();
@@ -114,8 +118,21 @@ export const SpeakPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Action Buttons: Speak, Repeat, Clear */}
-        <div style={{ display: 'flex', gap: '12px' }}>
+        {/* Action Buttons: Home, Speak, Repeat, Clear */}
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          {onNavigateHome && (
+            <DwellButton
+              id="speak-btn-home"
+              onClick={onNavigateHome}
+              variant="sage"
+              size="large"
+              ariaLabel="Return to Home screen"
+            >
+              <Home size={22} />
+              <span>Home</span>
+            </DwellButton>
+          )}
+
           <DwellButton
             id="speak-btn-speak"
             onClick={handleSpeak}

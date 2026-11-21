@@ -33,6 +33,9 @@ import { CameraStatus } from './components/CameraStatus';
 import { EyeCursor } from './components/EyeCursor';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { DiagnosticPanel } from './components/DiagnosticPanel';
+import { RestModeOverlay } from './components/RestModeOverlay';
+import { TrackingRecoveryBanner } from './components/TrackingRecoveryBanner';
+import { TrackingAcousticFeedback } from './services/TrackingAcousticFeedback';
 
 import { SetupPage } from './pages/SetupPage';
 import { CalibrationPage } from './pages/CalibrationPage';
@@ -185,12 +188,16 @@ export const App: React.FC = () => {
               const adState = eyeTracker.getAdaptiveTracker().getState();
               setAdaptiveState(adState);
 
+              const faceOk = !pred.confidence.isFaceLost;
+              TrackingAcousticFeedback.getInstance().update(faceOk, settings.soundFeedback ?? true, timestamp);
+
               cameraManager.updateVisionDiagnostics(
-                !pred.confidence.isFaceLost,
+                faceOk,
                 !pred.confidence.isBlinking,
                 lighting,
                 undefined,
-                pred.confidence.systemStatus
+                pred.confidence.systemStatus,
+                pred.confidence.reason
               );
 
               // Update selection engine only when gaze is reliable; otherwise pause/cancel
@@ -216,12 +223,16 @@ export const App: React.FC = () => {
           if (pred) {
             setCurrentPrediction(pred);
             const isCalibrated = !!headTracker.getNeutralPose();
+            const faceOk = !pred.confidence.isFaceLost;
+            TrackingAcousticFeedback.getInstance().update(faceOk, settings.soundFeedback ?? true, timestamp);
+
             cameraManager.updateVisionDiagnostics(
-              !pred.confidence.isFaceLost,
+              faceOk,
               true,
               lighting,
               undefined,
-              isCalibrated ? 'validated_tracking' : 'calibration_required'
+              isCalibrated ? 'validated_tracking' : 'calibration_required',
+              pred.confidence.reason
             );
             // Update selection engine with head pointer point
             selectionManager.update(
@@ -407,11 +418,11 @@ export const App: React.FC = () => {
         )}
 
         {currentPage === 'speak' && (
-          <SpeakPage />
+          <SpeakPage onNavigateHome={() => setCurrentPage('home')} />
         )}
 
         {currentPage === 'explore' && (
-          <ExplorePage />
+          <ExplorePage onNavigateHome={() => setCurrentPage('home')} />
         )}
 
         {currentPage === 'help' && (
@@ -422,6 +433,19 @@ export const App: React.FC = () => {
           />
         )}
       </div>
+
+      {/* Visual Tracking Recovery Alert Banner */}
+      <TrackingRecoveryBanner
+        diagnosticInfo={diagnosticInfo}
+        isResting={isResting}
+        isPaused={isPaused}
+      />
+
+      {/* Rest Mode Fullscreen Overlay with Hands-Free Wake Up Dwell Button */}
+      <RestModeOverlay
+        isOpen={isResting}
+        onResume={handleToggleRest}
+      />
 
       {/* Calibrated Gaze / Head Tracking Pointer Cursor */}
       <EyeCursor
