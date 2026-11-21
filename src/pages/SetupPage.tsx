@@ -23,6 +23,7 @@ interface SetupPageProps {
   onCameraStarted: () => void;
   onCameraStopped: () => void;
   onProceedToCalibration: () => void;
+  onSkipToHome?: () => void;
 }
 
 export const SetupPage: React.FC<SetupPageProps> = ({
@@ -36,6 +37,7 @@ export const SetupPage: React.FC<SetupPageProps> = ({
   onCameraStarted,
   onCameraStopped,
   onProceedToCalibration,
+  onSkipToHome,
 }) => {
   const [isCameraActive, setIsCameraActive] = useState(cameraManager.getIsRunning());
   const [isStarting, setIsStarting] = useState(false);
@@ -287,10 +289,23 @@ export const SetupPage: React.FC<SetupPageProps> = ({
             variant="primary"
             size="large"
             ariaLabel="Proceed to calibration"
-            style={{ minHeight: '72px' }}
+            style={{ minHeight: '64px' }}
           >
             <span>Continue to Calibration</span>
             <ArrowRight size={22} />
+          </DwellButton>
+
+          {/* Direct Skip to Home Button */}
+          <DwellButton
+            id="btn-skip-to-home"
+            onClick={onSkipToHome || onProceedToCalibration}
+            disabled={!isCameraActive}
+            variant="surface"
+            size="large"
+            ariaLabel="Skip directly to Home"
+            style={{ minHeight: '56px', border: '2px solid var(--primary)', color: 'var(--primary)', fontWeight: 600 }}
+          >
+            <span>Skip Directly to Home 🏠</span>
           </DwellButton>
           {!isReadyToProceed && (
             <p style={{ textAlign: 'center', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>

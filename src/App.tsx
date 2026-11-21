@@ -352,7 +352,7 @@ export const App: React.FC = () => {
         isPaused={isPaused}
         onToggleRest={handleToggleRest}
         onOpenSettings={() => setIsSettingsOpen(true)}
-        showBackHome={currentPage !== 'home' && currentPage !== 'setup'}
+        showBackHome={currentPage !== 'home'}
         onNavigateHome={() => setCurrentPage('home')}
         isCalibrated={!!calibrationResult?.passed}
       />
@@ -380,6 +380,7 @@ export const App: React.FC = () => {
               headTrackerRef.current?.stop();
             }}
             onProceedToCalibration={() => setCurrentPage('calibration')}
+            onSkipToHome={() => setCurrentPage('home')}
           />
         )}
 
