@@ -17,6 +17,7 @@ import React, { useEffect, useState } from 'react';
 import { DwellButton } from '../components/DwellButton';
 import { SpeechEngine } from '../speech/SpeechEngine';
 import { IndiaTodayNewsService, IndiaTodayArticle } from '../services/IndiaTodayNewsService';
+import { openAppWindow } from '../utils/windowLauncher';
 import {
   Newspaper,
   Youtube,
@@ -30,6 +31,7 @@ import {
   Square,
   ArrowRight,
   Wifi,
+  ExternalLink,
 } from 'lucide-react';
 
 interface HomePageProps {
@@ -406,7 +408,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenSettings, 
               )}
             </div>
 
-            {/* Audio controls */}
+            {/* Actions: Open Real Website + Read Aloud */}
             <div
               style={{
                 padding: '12px 18px',
@@ -415,6 +417,18 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenSettings, 
                 gap: '10px',
               }}
             >
+              <DwellButton
+                id="home-btn-open-real-indiatoday"
+                onClick={() => openAppWindow('https://www.indiatoday.in', 'IndiaTodayWindow')}
+                variant="primary"
+                size="normal"
+                ariaLabel="Launch real India Today website in standalone window"
+                style={{ flex: 1, minHeight: '44px', fontSize: '0.9rem', backgroundColor: '#DC2626', border: 'none' }}
+              >
+                <ExternalLink size={16} />
+                <span>Open Website</span>
+              </DwellButton>
+
               <DwellButton
                 id="home-btn-read-headline"
                 onClick={handleReadHeadline}
@@ -427,6 +441,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenSettings, 
                 <Play size={16} />
                 <span>{isReadingHeadline ? 'Reading…' : 'Read Aloud'}</span>
               </DwellButton>
+
               <DwellButton
                 id="home-btn-stop-headline"
                 onClick={() => {

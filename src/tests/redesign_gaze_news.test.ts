@@ -198,6 +198,6 @@ describe('Redesign, Gaze Jitter & News System', () => {
       expect(firstArticle.title).toBeTruthy();
       expect(firstArticle.paragraphs.length).toBeGreaterThan(0);
       expect(firstArticle.publishedDate).toBeTruthy();
-    });
+    }, 15000);
   });
 });
