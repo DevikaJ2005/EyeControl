@@ -41,6 +41,7 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [progress, setProgress] = useState(0);
   const [isDwelling, setIsDwelling] = useState(false);
+  const [isTargeted, setIsTargeted] = useState(false);
   const [isSelected, setIsSelected] = useState(false);
 
   useEffect(() => {
@@ -63,12 +64,14 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
       allowInRestMode,
     });
 
-    // Listen to dwell progress updates
+    // Listen to dwell/target progress updates
     const unsubscribeDwell = selectionManager.getDwellEngine().subscribe((update: DwellProgressUpdate) => {
       if (update.targetId === id) {
+        setIsTargeted(true);
         setProgress(update.progress);
         setIsDwelling(update.progress > 0 && update.progress < 1);
       } else {
+        setIsTargeted(false);
         setProgress(0);
         setIsDwelling(false);
       }
@@ -81,43 +84,45 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
   }, [id, onClick, disabled, ariaLabel, children, allowInRestMode]);
 
   // Variant styling classes
+  const isHighlighted = isDwelling || isTargeted;
+
   const getVariantStyles = () => {
     switch (variant) {
       case 'primary':
         return {
           background: isSelected ? '#0A1B28' : 'var(--primary)',
           color: 'var(--text-inverse)',
-          border: isDwelling ? '2px solid var(--gaze-blue)' : '2px solid var(--primary)',
-          boxShadow: isDwelling ? 'var(--shadow-blue-glow)' : 'var(--shadow-subtle)',
+          border: isHighlighted ? '2.5px solid var(--gaze-blue)' : '2px solid var(--primary)',
+          boxShadow: isHighlighted ? '0 0 16px rgba(0, 136, 255, 0.6)' : 'var(--shadow-subtle)',
         };
       case 'emergency':
         return {
           background: isSelected ? 'var(--emergency-hover)' : 'var(--emergency)',
           color: '#FFFFFF',
-          border: isDwelling ? '2px solid #FFFFFF' : '2px solid var(--emergency)',
-          boxShadow: isDwelling ? '0 0 0 3px rgba(220, 38, 38, 0.4)' : 'var(--shadow-subtle)',
+          border: isHighlighted ? '2.5px solid #FFFFFF' : '2px solid var(--emergency)',
+          boxShadow: isHighlighted ? '0 0 0 3px rgba(220, 38, 38, 0.4)' : 'var(--shadow-subtle)',
         };
       case 'sage':
         return {
           background: isSelected ? 'var(--surface-blue-strong)' : 'var(--surface-blue)',
           color: 'var(--secondary)',
-          border: isDwelling ? '2px solid var(--gaze-blue)' : '2px solid #BFDBFE',
-          boxShadow: isDwelling ? 'var(--shadow-blue-glow)' : 'var(--shadow-subtle)',
+          border: isHighlighted ? '2.5px solid var(--gaze-blue)' : '2px solid #BFDBFE',
+          boxShadow: isHighlighted ? '0 0 16px rgba(0, 136, 255, 0.6)' : 'var(--shadow-subtle)',
         };
       case 'ghost':
         return {
-          background: isDwelling ? 'var(--surface-blue)' : 'transparent',
+          background: isHighlighted ? 'var(--surface-blue)' : 'transparent',
           color: 'var(--text-primary)',
-          border: isDwelling ? '2px solid var(--gaze-blue)' : '2px solid var(--border)',
-          boxShadow: isDwelling ? 'var(--shadow-blue-glow)' : 'none',
+          border: isHighlighted ? '2.5px solid var(--gaze-blue)' : '2px solid var(--border)',
+          boxShadow: isHighlighted ? '0 0 16px rgba(0, 136, 255, 0.6)' : 'none',
         };
       case 'surface':
       default:
         return {
-          background: isDwelling ? 'var(--surface-blue)' : 'var(--surface)',
+          background: isHighlighted ? 'var(--surface-blue)' : 'var(--surface)',
           color: 'var(--text-primary)',
-          border: isDwelling ? '2px solid var(--gaze-blue)' : '2px solid var(--border)',
-          boxShadow: isDwelling ? 'var(--shadow-blue-glow)' : 'var(--shadow-card)',
+          border: isHighlighted ? '2.5px solid var(--gaze-blue)' : '2px solid var(--border)',
+          boxShadow: isHighlighted ? '0 0 16px rgba(0, 136, 255, 0.6)' : 'var(--shadow-card)',
         };
     }
   };
@@ -166,7 +171,7 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
         alignItems: 'center',
         justifyContent: 'center',
         fontWeight: 600,
-        transform: isDwelling ? 'scale(1.02)' : isSelected ? 'scale(0.98)' : 'scale(1.0)',
+        transform: isHighlighted ? 'scale(1.025)' : isSelected ? 'scale(0.98)' : 'scale(1.0)',
         transition: 'all 120ms ease-out',
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.45 : 1,
@@ -175,7 +180,7 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
         ...sizeStyle,
         ...style,
       }}
-      className={`dwell-button ${isDwelling ? 'is-dwelling' : ''} ${className}`}
+      className={`dwell-button ${isHighlighted ? 'is-dwelling' : ''} ${className}`}
     >
       {/* Background progress fill line */}
       {progress > 0 && (
@@ -195,7 +200,7 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
       )}
 
       {/* Prominent Blue Gaze Selection Ring for Card/Center Targets */}
-      {(showCenterRing || size === 'card') && isDwelling && (
+      {(showCenterRing || size === 'card') && isHighlighted && (
         <div
           style={{
             position: 'absolute',

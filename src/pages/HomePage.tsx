@@ -18,6 +18,7 @@ import { DwellButton } from '../components/DwellButton';
 import { SpeechEngine } from '../speech/SpeechEngine';
 import { IndiaTodayNewsService, IndiaTodayArticle } from '../services/IndiaTodayNewsService';
 import { openAppWindow } from '../utils/windowLauncher';
+import { SelectionManager } from '../interaction/SelectionManager';
 import {
   Newspaper,
   Youtube,
@@ -32,6 +33,10 @@ import {
   ArrowRight,
   Wifi,
   ExternalLink,
+  LayoutGrid,
+  Eye,
+  Check,
+  Sparkles,
 } from 'lucide-react';
 
 interface HomePageProps {
@@ -48,6 +53,7 @@ type NavTile = {
   page: 'news' | 'youtube' | 'speak' | 'help' | 'settings' | 'calibration' | 'rest' | 'fullscreen';
   iconBg: string;
   iconColor: string;
+  keyNum: string;
   primary?: boolean;
 };
 
@@ -55,8 +61,28 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenSettings, 
   const [topHeadline, setTopHeadline] = useState<IndiaTodayArticle | null>(null);
   const [isReadingHeadline, setIsReadingHeadline] = useState(false);
   const [headlineFetched, setHeadlineFetched] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<'giant_grid' | 'standard'>('giant_grid');
+  const [selectionMethod, setSelectionMethod] = useState<'hybrid' | 'dwell' | 'blink'>('hybrid');
 
   const speechEngine = SpeechEngine.getInstance();
+
+  // Keyboard shortcut fallback (1-6 for primary tiles)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      switch (e.key) {
+        case '1': onNavigate('news'); break;
+        case '2': onNavigate('youtube'); break;
+        case '3': onNavigate('speak'); break;
+        case '4': onNavigate('help'); break;
+        case '5': onOpenSettings ? onOpenSettings() : onNavigate('settings'); break;
+        case '6': onNavigate('calibration'); break;
+        case 'g': setLayoutMode((prev) => (prev === 'giant_grid' ? 'standard' : 'giant_grid')); break;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onNavigate, onOpenSettings]);
 
   useEffect(() => {
     IndiaTodayNewsService.getInstance()
@@ -67,6 +93,11 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenSettings, 
       })
       .catch(() => setHeadlineFetched(true));
   }, []);
+
+  const handleMethodChange = (method: 'hybrid' | 'dwell' | 'blink') => {
+    setSelectionMethod(method);
+    SelectionManager.getInstance().setSelectionMethod(method);
+  };
 
   const handleReadHeadline = () => {
     if (isReadingHeadline) {
@@ -94,59 +125,77 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenSettings, 
     {
       id: 'tile-news',
       label: 'News',
-      sub: 'India Today • Live',
-      icon: <Newspaper size={30} />,
+      sub: 'India Today • Live Feed',
+      icon: <Newspaper size={38} />,
       page: 'news',
       iconBg: '#EFF6FF',
       iconColor: '#1D4ED8',
+      keyNum: '1',
       primary: true,
     },
     {
       id: 'tile-youtube',
       label: 'YouTube',
-      sub: 'Watch videos',
-      icon: <Youtube size={30} />,
+      sub: 'Watch Videos & Channels',
+      icon: <Youtube size={38} />,
       page: 'youtube',
       iconBg: '#FEF2F2',
       iconColor: '#DC2626',
+      keyNum: '2',
     },
     {
       id: 'tile-speak',
       label: 'Speak',
-      sub: 'Communication board',
-      icon: <Volume2 size={30} />,
+      sub: 'Communication Board',
+      icon: <Volume2 size={38} />,
       page: 'speak',
       iconBg: '#F0FDF4',
       iconColor: '#16A34A',
+      keyNum: '3',
     },
     {
       id: 'tile-help',
-      label: 'Help',
-      sub: 'Guide & emergency',
-      icon: <HelpCircle size={30} />,
+      label: 'Help & Emergency',
+      sub: 'Guides, Tips & SOS',
+      icon: <HelpCircle size={38} />,
       page: 'help',
       iconBg: '#FFFBEB',
       iconColor: '#B45309',
+      keyNum: '4',
     },
     {
       id: 'tile-settings',
       label: 'Settings',
-      sub: 'Adjust dwell & speed',
-      icon: <Settings size={30} />,
+      sub: 'Adjust Sensitivity & Audio',
+      icon: <Settings size={38} />,
       page: 'settings',
       iconBg: '#F8FAFC',
       iconColor: '#475569',
+      keyNum: '5',
     },
     {
       id: 'tile-calibrate',
       label: 'Calibrate',
-      sub: 'Improve accuracy',
-      icon: <Target size={30} />,
+      sub: 'Fine-tune Gaze Accuracy',
+      icon: <Target size={38} />,
       page: 'calibration',
       iconBg: '#EFF6FF',
       iconColor: '#2C5E8A',
+      keyNum: '6',
     },
   ];
+
+  const handleTileClick = (tile: NavTile) => {
+    if (tile.page === 'settings' && onOpenSettings) {
+      onOpenSettings();
+    } else if (tile.page === 'rest') {
+      onToggleRest?.();
+    } else if (tile.page === 'fullscreen') {
+      handleFullscreen();
+    } else {
+      onNavigate(tile.page as Parameters<typeof onNavigate>[0]);
+    }
+  };
 
   return (
     <main
@@ -154,53 +203,225 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenSettings, 
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        padding: '20px 24px',
-        gap: '20px',
+        padding: '16px 20px',
+        gap: '14px',
         height: 'calc(100vh - 56px)',
         overflow: 'hidden',
         backgroundColor: 'var(--background)',
       }}
     >
       {/* ============================================================
-          TOP SECTION: LEFT nav tiles + RIGHT news preview
+          TOP CONTROL BAR: Selection Mode & Grid Toggle
           ============================================================ */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: '300px 1fr',
-          gap: '20px',
-          flex: 1,
-          minHeight: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          backgroundColor: '#FFFFFF',
+          borderRadius: 'var(--radius-md)',
+          padding: '8px 16px',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-subtle)',
+          flexShrink: 0,
         }}
       >
-        {/* ===========================
-            LEFT: Navigation Tiles
-            =========================== */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+            Selection Method:
+          </span>
+          <DwellButton
+            id="btn-method-hybrid"
+            onClick={() => handleMethodChange('hybrid')}
+            variant={selectionMethod === 'hybrid' ? 'primary' : 'ghost'}
+            size="normal"
+            style={{ minHeight: '34px', padding: '4px 12px', fontSize: '0.82rem' }}
+          >
+            <Sparkles size={14} />
+            <span>⚡ Hold or Blink (Recommended)</span>
+          </DwellButton>
+
+          <DwellButton
+            id="btn-method-blink"
+            onClick={() => handleMethodChange('blink')}
+            variant={selectionMethod === 'blink' ? 'primary' : 'ghost'}
+            size="normal"
+            style={{ minHeight: '34px', padding: '4px 12px', fontSize: '0.82rem' }}
+          >
+            <Eye size={14} />
+            <span>👁️ Blink to Select (~0.4s)</span>
+          </DwellButton>
+
+          <DwellButton
+            id="btn-method-dwell"
+            onClick={() => handleMethodChange('dwell')}
+            variant={selectionMethod === 'dwell' ? 'primary' : 'ghost'}
+            size="normal"
+            style={{ minHeight: '34px', padding: '4px 12px', fontSize: '0.82rem' }}
+          >
+            <Target size={14} />
+            <span>🎯 Hold Gaze Only</span>
+          </DwellButton>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <DwellButton
+            id="btn-toggle-layout-mode"
+            onClick={() => setLayoutMode((prev) => (prev === 'giant_grid' ? 'standard' : 'giant_grid'))}
+            variant={layoutMode === 'giant_grid' ? 'sage' : 'surface'}
+            size="normal"
+            style={{ minHeight: '34px', padding: '4px 14px', fontSize: '0.82rem' }}
+          >
+            <LayoutGrid size={15} />
+            <span>{layoutMode === 'giant_grid' ? '🔲 Giant Grid Active' : '📋 Detailed View'}</span>
+          </DwellButton>
+        </div>
+      </div>
+
+      {/* ============================================================
+          VIEW 1: GIANT QUADRANT GAZE GRID (6 Massive Targets)
+          Impossible to miss, even with approximate webcam gaze!
+          ============================================================ */}
+      {layoutMode === 'giant_grid' ? (
+        <div
+          style={{
+            flex: 1,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateRows: 'repeat(2, 1fr)',
+            gap: '16px',
+            minHeight: 0,
+          }}
+        >
+          {NAV_TILES.map((tile) => (
+            <DwellButton
+              key={tile.id}
+              id={tile.id}
+              onClick={() => handleTileClick(tile)}
+              variant={tile.primary ? 'primary' : 'surface'}
+              size="card"
+              showCenterRing={true}
+              ariaLabel={`Option ${tile.keyNum}: ${tile.label} - ${tile.sub}`}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                padding: '24px',
+                height: '100%',
+                borderRadius: 'var(--radius-lg)',
+                position: 'relative',
+                boxShadow: 'var(--shadow-card)',
+                transition: 'all 120ms ease-out',
+                cursor: 'pointer',
+              }}
+            >
+              {/* Giant Number Badge in Top-Left */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '16px',
+                  left: '18px',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  backgroundColor: tile.primary ? 'rgba(255,255,255,0.25)' : 'rgba(15, 37, 55, 0.08)',
+                  color: tile.primary ? '#FFFFFF' : 'var(--text-primary)',
+                  fontWeight: 900,
+                  fontSize: '1.2rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {tile.keyNum}
+              </div>
+
+              {/* Icon */}
+              <div
+                style={{
+                  width: '76px',
+                  height: '76px',
+                  borderRadius: '18px',
+                  backgroundColor: tile.primary ? 'rgba(255,255,255,0.18)' : tile.iconBg,
+                  color: tile.primary ? '#FFFFFF' : tile.iconColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '14px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+                }}
+              >
+                {tile.icon}
+              </div>
+
+              {/* Title */}
+              <div
+                style={{
+                  fontSize: '1.75rem',
+                  fontWeight: 800,
+                  color: tile.primary ? '#FFFFFF' : 'var(--text-primary)',
+                  lineHeight: 1.2,
+                  textAlign: 'center',
+                }}
+              >
+                {tile.label}
+              </div>
+
+              {/* Subtitle */}
+              <div
+                style={{
+                  fontSize: '0.95rem',
+                  color: tile.primary ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)',
+                  marginTop: '6px',
+                  textAlign: 'center',
+                }}
+              >
+                {tile.sub}
+              </div>
+
+              {/* Interaction Hint */}
+              <div
+                style={{
+                  marginTop: '10px',
+                  fontSize: '0.78rem',
+                  color: tile.primary ? 'rgba(255,255,255,0.7)' : 'var(--primary)',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                }}
+              >
+                Look & hold or blink
+              </div>
+            </DwellButton>
+          ))}
+        </div>
+      ) : (
+        /* ============================================================
+            VIEW 2: STANDARD SPLIT DASHBOARD WITH NEWS PREVIEW
+            ============================================================ */
         <div
           style={{
             display: 'grid',
-            gridTemplateRows: 'repeat(6, 1fr)',
-            gap: '12px',
+            gridTemplateColumns: '320px 1fr',
+            gap: '16px',
+            flex: 1,
+            minHeight: 0,
           }}
         >
-          {NAV_TILES.map((tile) => {
-            const isSettings = tile.page === 'settings';
-            const isCalibrate = tile.page === 'calibration';
-            return (
+          {/* LEFT: Navigation Column */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateRows: 'repeat(6, 1fr)',
+              gap: '10px',
+            }}
+          >
+            {NAV_TILES.map((tile) => (
               <DwellButton
                 key={tile.id}
                 id={tile.id}
-                onClick={() => {
-                  if (isSettings && onOpenSettings) {
-                    onOpenSettings();
-                  } else if (tile.page === 'rest') {
-                    onToggleRest?.();
-                  } else if (tile.page === 'fullscreen') {
-                    handleFullscreen();
-                  } else {
-                    onNavigate(tile.page as Parameters<typeof onNavigate>[0]);
-                  }
-                }}
+                onClick={() => handleTileClick(tile)}
                 variant={tile.primary ? 'primary' : 'surface'}
                 size="normal"
                 ariaLabel={`${tile.label}: ${tile.sub}`}
@@ -208,8 +429,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenSettings, 
                   display: 'flex',
                   alignItems: 'center',
                   gap: '14px',
-                  padding: '0 18px',
-                  minHeight: '0',
+                  padding: '0 16px',
                   height: '100%',
                   textAlign: 'left',
                   borderRadius: 'var(--radius-md)',
@@ -218,10 +438,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenSettings, 
               >
                 <div
                   style={{
-                    width: '48px',
-                    height: '48px',
+                    width: '44px',
+                    height: '44px',
                     borderRadius: '10px',
-                    backgroundColor: tile.primary ? 'rgba(255,255,255,0.15)' : tile.iconBg,
+                    backgroundColor: tile.primary ? 'rgba(255,255,255,0.18)' : tile.iconBg,
                     color: tile.primary ? '#FFFFFF' : tile.iconColor,
                     display: 'flex',
                     alignItems: 'center',
@@ -234,7 +454,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenSettings, 
                 <div>
                   <div
                     style={{
-                      fontSize: '1.1rem',
+                      fontSize: '1.05rem',
                       fontWeight: 800,
                       color: tile.primary ? '#FFFFFF' : 'var(--text-primary)',
                       lineHeight: 1.1,
@@ -244,7 +464,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenSettings, 
                   </div>
                   <div
                     style={{
-                      fontSize: '0.8rem',
+                      fontSize: '0.78rem',
                       color: tile.primary ? 'rgba(255,255,255,0.75)' : 'var(--text-muted)',
                       marginTop: '2px',
                     }}
@@ -253,263 +473,219 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenSettings, 
                   </div>
                 </div>
               </DwellButton>
-            );
-          })}
-        </div>
+            ))}
+          </div>
 
-        {/* ===========================
-            RIGHT: News preview + 2×3 secondary grid
-            =========================== */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateRows: '1fr auto',
-            gap: '16px',
-            minHeight: 0,
-          }}
-        >
-          {/* News preview card — full height top section */}
+          {/* RIGHT: Live News Card */}
           <div
             style={{
-              backgroundColor: '#FFFFFF',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid var(--border)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
+              display: 'grid',
+              gridTemplateRows: '1fr auto',
+              gap: '12px',
+              minHeight: 0,
             }}
           >
-            {/* Card header */}
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '14px 18px',
-                borderBottom: '1px solid var(--border)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span
-                  style={{
-                    fontSize: '0.8rem',
-                    fontWeight: 800,
-                    color: '#DC2626',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.4px',
-                  }}
-                >
-                  India Today
-                </span>
-                <span
-                  style={{
-                    fontSize: '0.75rem',
-                    color: 'var(--text-muted)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                  }}
-                >
-                  <Wifi size={12} />
-                  {headlineFetched ? 'Latest News' : 'Loading…'}
-                </span>
-              </div>
-              <DwellButton
-                id="home-btn-view-all-news"
-                onClick={() => onNavigate('news')}
-                variant="ghost"
-                size="normal"
-                ariaLabel="Open full news reader"
-                style={{ minHeight: '36px', padding: '5px 10px', fontSize: '0.82rem' }}
-              >
-                <span>All News</span>
-                <ArrowRight size={13} />
-              </DwellButton>
-            </div>
-
-            {/* Headline content */}
-            <div
-              style={{
-                flex: 1,
-                padding: '16px 18px',
+                backgroundColor: '#FFFFFF',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--border)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '12px',
                 overflow: 'hidden',
               }}
             >
-              {topHeadline ? (
-                <>
-                  {topHeadline.imageUrl && (
-                    <div
-                      style={{
-                        height: '180px',
-                        borderRadius: 'var(--radius-sm)',
-                        overflow: 'hidden',
-                        backgroundColor: '#0F172A',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <img
-                        src={topHeadline.imageUrl}
-                        alt={topHeadline.title}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    </div>
-                  )}
-                  <h2
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 18px',
+                  borderBottom: '1px solid var(--border)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span
                     style={{
-                      fontSize: '1.1rem',
-                      fontWeight: 700,
-                      color: 'var(--text-primary)',
-                      lineHeight: 1.35,
-                      margin: 0,
-                      display: '-webkit-box',
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
+                      fontSize: '0.8rem',
+                      fontWeight: 800,
+                      color: '#DC2626',
+                      textTransform: 'uppercase',
                     }}
                   >
-                    {topHeadline.title}
-                  </h2>
-                  {topHeadline.paragraphs[0] && (
-                    <p
-                      style={{
-                        fontSize: '0.88rem',
-                        color: 'var(--text-secondary)',
-                        lineHeight: 1.5,
-                        margin: 0,
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {topHeadline.paragraphs[0]}
-                    </p>
-                  )}
-                </>
-              ) : (
-                <div
-                  style={{
-                    flex: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--text-muted)',
-                    fontSize: '0.9rem',
-                  }}
-                >
-                  {headlineFetched ? 'No headlines available' : 'Fetching headlines…'}
+                    India Today
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Wifi size={12} />
+                    {headlineFetched ? 'Live Headline' : 'Fetching…'}
+                  </span>
                 </div>
-              )}
-            </div>
-
-            {/* Actions: Open Real Website + Read Aloud */}
-            <div
-              style={{
-                padding: '12px 18px',
-                borderTop: '1px solid var(--border)',
-                display: 'flex',
-                gap: '10px',
-              }}
-            >
-              <DwellButton
-                id="home-btn-open-real-indiatoday"
-                onClick={() => openAppWindow('https://www.indiatoday.in', 'IndiaTodayWindow')}
-                variant="primary"
-                size="normal"
-                ariaLabel="Launch real India Today website in standalone window"
-                style={{ flex: 1, minHeight: '44px', fontSize: '0.9rem', backgroundColor: '#DC2626', border: 'none' }}
-              >
-                <ExternalLink size={16} />
-                <span>Open Website</span>
-              </DwellButton>
-
-              <DwellButton
-                id="home-btn-read-headline"
-                onClick={handleReadHeadline}
-                variant={isReadingHeadline ? 'primary' : 'sage'}
-                size="normal"
-                ariaLabel={isReadingHeadline ? 'Stop reading' : 'Read headline aloud'}
-                disabled={!topHeadline}
-                style={{ flex: 1, minHeight: '44px', fontSize: '0.9rem' }}
-              >
-                <Play size={16} />
-                <span>{isReadingHeadline ? 'Reading…' : 'Read Aloud'}</span>
-              </DwellButton>
-
-              <DwellButton
-                id="home-btn-stop-headline"
-                onClick={() => {
-                  speechEngine.stop();
-                  setIsReadingHeadline(false);
-                }}
-                variant="ghost"
-                size="normal"
-                disabled={!isReadingHeadline}
-                ariaLabel="Stop reading"
-                style={{ minHeight: '44px', padding: '8px 14px', fontSize: '0.9rem' }}
-              >
-                <Square size={14} />
-                <span>Stop</span>
-              </DwellButton>
-            </div>
-          </div>
-
-          {/* Bottom action bar: Rest + Fullscreen */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              justifyContent: 'space-between',
-              padding: '10px 16px',
-              backgroundColor: '#FFFFFF',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border)',
-            }}
-          >
-            <div
-              style={{
-                fontSize: '0.9rem',
-                color: 'var(--text-secondary)',
-                fontWeight: 500,
-              }}
-            >
-              Look at a tile and hold your gaze for{' '}
-              <span style={{ fontWeight: 700, color: 'var(--secondary)' }}>~1 second</span> to select.
-              A blue ring shows selection progress.
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {onToggleRest && (
                 <DwellButton
-                  id="home-btn-rest"
-                  onClick={onToggleRest}
+                  id="home-btn-view-all-news"
+                  onClick={() => onNavigate('news')}
                   variant="ghost"
                   size="normal"
-                  ariaLabel="Enter Rest Mode — pause all tracking"
-                  style={{ minHeight: '40px', padding: '6px 14px', fontSize: '0.88rem', whiteSpace: 'nowrap' }}
+                  style={{ minHeight: '34px', padding: '4px 10px', fontSize: '0.82rem' }}
                 >
-                  <Moon size={16} />
-                  <span>Rest</span>
+                  <span>All News</span>
+                  <ArrowRight size={13} />
                 </DwellButton>
-              )}
-              <DwellButton
-                id="home-btn-fullscreen"
-                onClick={handleFullscreen}
-                variant="ghost"
-                size="normal"
-                ariaLabel="Toggle fullscreen"
-                style={{ minHeight: '40px', padding: '6px 10px' }}
+              </div>
+
+              <div
+                style={{
+                  flex: 1,
+                  padding: '16px 18px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  overflow: 'hidden',
+                }}
               >
-                <Maximize2 size={16} />
-              </DwellButton>
+                {topHeadline ? (
+                  <>
+                    {topHeadline.imageUrl && (
+                      <div
+                        style={{
+                          height: '180px',
+                          borderRadius: 'var(--radius-sm)',
+                          overflow: 'hidden',
+                          backgroundColor: '#0F172A',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <img
+                          src={topHeadline.imageUrl}
+                          alt={topHeadline.title}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
+                    <h2
+                      style={{
+                        fontSize: '1.15rem',
+                        fontWeight: 700,
+                        color: 'var(--text-primary)',
+                        lineHeight: 1.35,
+                        margin: 0,
+                      }}
+                    >
+                      {topHeadline.title}
+                    </h2>
+                    {topHeadline.paragraphs[0] && (
+                      <p
+                        style={{
+                          fontSize: '0.9rem',
+                          color: 'var(--text-secondary)',
+                          lineHeight: 1.5,
+                          margin: 0,
+                        }}
+                      >
+                        {topHeadline.paragraphs[0]}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+                    Loading news feed…
+                  </div>
+                )}
+              </div>
+
+              <div
+                style={{
+                  padding: '10px 18px',
+                  borderTop: '1px solid var(--border)',
+                  display: 'flex',
+                  gap: '10px',
+                }}
+              >
+                <DwellButton
+                  id="home-btn-open-real-indiatoday"
+                  onClick={() => openAppWindow('https://www.indiatoday.in', 'IndiaTodayWindow')}
+                  variant="primary"
+                  size="normal"
+                  style={{ flex: 1, minHeight: '42px', fontSize: '0.9rem', backgroundColor: '#DC2626', border: 'none' }}
+                >
+                  <ExternalLink size={16} />
+                  <span>Open Website</span>
+                </DwellButton>
+
+                <DwellButton
+                  id="home-btn-read-headline"
+                  onClick={handleReadHeadline}
+                  variant={isReadingHeadline ? 'primary' : 'sage'}
+                  size="normal"
+                  disabled={!topHeadline}
+                  style={{ flex: 1, minHeight: '42px', fontSize: '0.9rem' }}
+                >
+                  <Play size={16} />
+                  <span>{isReadingHeadline ? 'Reading…' : 'Read Aloud'}</span>
+                </DwellButton>
+
+                <DwellButton
+                  id="home-btn-stop-headline"
+                  onClick={() => {
+                    speechEngine.stop();
+                    setIsReadingHeadline(false);
+                  }}
+                  variant="ghost"
+                  size="normal"
+                  disabled={!isReadingHeadline}
+                  style={{ minHeight: '42px', padding: '6px 14px' }}
+                >
+                  <Square size={14} />
+                  <span>Stop</span>
+                </DwellButton>
+              </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          BOTTOM ACTION BAR: Rest & Fullscreen
+          ============================================================ */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px 16px',
+          backgroundColor: '#FFFFFF',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border)',
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
+          💡 <span style={{ fontWeight: 700, color: 'var(--secondary)' }}>3 ways to select:</span> Look at any tile and hold gaze for 0.8s, OR close eyes for 0.4s to blink-click, OR press keys 1–6.
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {onToggleRest && (
+            <DwellButton
+              id="home-btn-rest"
+              onClick={onToggleRest}
+              variant="ghost"
+              size="normal"
+              style={{ minHeight: '36px', padding: '4px 12px', fontSize: '0.85rem' }}
+            >
+              <Moon size={15} />
+              <span>Rest</span>
+            </DwellButton>
+          )}
+          <DwellButton
+            id="home-btn-fullscreen"
+            onClick={handleFullscreen}
+            variant="ghost"
+            size="normal"
+            style={{ minHeight: '36px', padding: '4px 10px' }}
+          >
+            <Maximize2 size={15} />
+          </DwellButton>
         </div>
       </div>
     </main>

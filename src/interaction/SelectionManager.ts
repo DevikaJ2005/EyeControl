@@ -17,13 +17,19 @@ export class SelectionManager {
   private soundFeedbackEnabled: boolean = true;
   private audioCtx: AudioContext | null = null;
 
+  // Selection method: hybrid (both dwell & intentional blink), dwell_only, or blink_only
+  private selectionMethod: 'hybrid' | 'dwell' | 'blink' = 'hybrid';
+  private blinkStartTime: number | null = null;
+  private intentionalBlinkTriggered: boolean = false;
+  private intentionalBlinkThresholdMs: number = 420; // 420ms deliberate eye closure to click
+
   // Hysteresis & Magnetic Snapping
   private lastHoveredTargetId: string | null = null;
   private currentSnappedPoint: Point2D | null = null;
-  private enterTolerancePx: number = 20; // Expanded target acquisition region
-  private exitTolerancePx: number = 44;  // Extra margin to keep target active during micro-saccades
-  private magneticSnapRadiusPx: number = 52;
-  private magneticSnapStrength: number = 0.65; // Attraction weight toward button center
+  private enterTolerancePx: number = 20;
+  private exitTolerancePx: number = 44;
+  private magneticSnapRadiusPx: number = 320; // Expanded magnetic reach
+  private magneticSnapStrength: number = 0.75;
 
   public static getInstance(): SelectionManager {
     if (!SelectionManager.instance) {
@@ -34,6 +40,14 @@ export class SelectionManager {
 
   private constructor() {
     this.dwellEngine = new DwellEngine({}, (targetId) => this.handleTargetSelected(targetId));
+  }
+
+  public setSelectionMethod(method: 'hybrid' | 'dwell' | 'blink'): void {
+    this.selectionMethod = method;
+  }
+
+  public getSelectionMethod(): 'hybrid' | 'dwell' | 'blink' {
+    return this.selectionMethod;
   }
 
   public getDwellEngine(): DwellEngine {
@@ -60,6 +74,8 @@ export class SelectionManager {
       this.dwellEngine.cancel();
       this.lastHoveredTargetId = null;
       this.currentSnappedPoint = null;
+      this.blinkStartTime = null;
+      this.intentionalBlinkTriggered = false;
     }
   }
 
@@ -67,6 +83,8 @@ export class SelectionManager {
     this.dwellEngine.cancel();
     this.lastHoveredTargetId = null;
     this.currentSnappedPoint = null;
+    this.blinkStartTime = null;
+    this.intentionalBlinkTriggered = false;
   }
 
   public getRestMode(): boolean {
@@ -94,6 +112,8 @@ export class SelectionManager {
     this.isReadingModeActive = false;
     this.lastHoveredTargetId = null;
     this.currentSnappedPoint = null;
+    this.blinkStartTime = null;
+    this.intentionalBlinkTriggered = false;
     this.dwellEngine.setOnSelect((targetId) => this.handleTargetSelected(targetId));
     this.dwellEngine.cancel();
   }
@@ -111,7 +131,7 @@ export class SelectionManager {
   }
 
   /**
-   * Process current focus point and evaluate dwell selection
+   * Process current focus point and evaluate selection (Voronoi Proximity + Dwell + Intentional Blink)
    */
   public update(point: Point2D, confidence: GazeConfidenceResult, now: number = performance.now()): void {
     // Emergency corner abort: Looking at top corners (within 60px) cancels ongoing dwell
@@ -123,11 +143,12 @@ export class SelectionManager {
       this.dwellEngine.cancel();
       this.lastHoveredTargetId = null;
       this.currentSnappedPoint = null;
+      this.blinkStartTime = null;
+      this.intentionalBlinkTriggered = false;
       return;
     }
 
     if (this.isRestModeActive) {
-      // In Rest Mode, only allow hovering and dwelling on explicit wake/resume targets
       const wakeTargetId = this.findRestModeTarget(point);
       if (wakeTargetId) {
         this.computeMagneticSnap(point, wakeTargetId);
@@ -139,8 +160,8 @@ export class SelectionManager {
       return;
     }
 
-    // Hit test against registered targets with Hysteresis
-    const hoveredTargetId = this.findHoveredTargetWithHysteresis(point);
+    // 1. Robust Voronoi Nearest-Target Hit Testing (Prevents missing buttons when gaze is off by 50-150px)
+    const hoveredTargetId = this.findHoveredTargetWithProximity(point);
     this.lastHoveredTargetId = hoveredTargetId;
 
     if (hoveredTargetId) {
@@ -149,7 +170,35 @@ export class SelectionManager {
       this.currentSnappedPoint = null;
     }
 
-    this.dwellEngine.update(hoveredTargetId, confidence, now);
+    // 2. Intentional Blink-To-Click Gesture (Close eyes for >= 420ms to select immediately)
+    if (confidence.isBlinking) {
+      if (this.blinkStartTime === null) {
+        this.blinkStartTime = now;
+        this.intentionalBlinkTriggered = false;
+      }
+      const blinkDuration = now - this.blinkStartTime;
+
+      if (
+        (this.selectionMethod === 'hybrid' || this.selectionMethod === 'blink') &&
+        !this.intentionalBlinkTriggered &&
+        blinkDuration >= this.intentionalBlinkThresholdMs &&
+        blinkDuration <= 1500 &&
+        hoveredTargetId
+      ) {
+        this.intentionalBlinkTriggered = true;
+        this.handleTargetSelected(hoveredTargetId);
+        this.dwellEngine.resetDwell();
+        return;
+      }
+    } else {
+      this.blinkStartTime = null;
+      this.intentionalBlinkTriggered = false;
+    }
+
+    // 3. Continuous Dwell Timer Selection (if enabled)
+    if (this.selectionMethod !== 'blink') {
+      this.dwellEngine.update(hoveredTargetId, confidence, now);
+    }
   }
 
   /**
@@ -171,7 +220,7 @@ export class SelectionManager {
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist < this.magneticSnapRadiusPx) {
-      const snapFactor = this.magneticSnapStrength * (1.0 - dist / (this.magneticSnapRadiusPx * 1.5));
+      const snapFactor = Math.min(0.85, 0.40 + (1.0 - Math.min(1.0, dist / this.magneticSnapRadiusPx)) * 0.45);
       this.currentSnappedPoint = {
         x: rawPoint.x + dx * snapFactor,
         y: rawPoint.y + dy * snapFactor,
@@ -192,10 +241,10 @@ export class SelectionManager {
       if (target.element) {
         const rect = target.element.getBoundingClientRect();
         if (
-          point.x >= rect.left - this.enterTolerancePx &&
-          point.x <= rect.right + this.enterTolerancePx &&
-          point.y >= rect.top - this.enterTolerancePx &&
-          point.y <= rect.bottom + this.enterTolerancePx
+          point.x >= rect.left - 40 &&
+          point.x <= rect.right + 40 &&
+          point.y >= rect.top - 40 &&
+          point.y <= rect.bottom + 40
         ) {
           return id;
         }
@@ -205,32 +254,31 @@ export class SelectionManager {
   }
 
   /**
-   * Hysteresis hit testing:
-   * 1. If currently inside a target, check using the wider EXIT_TOLERANCE margin.
-   * 2. If gaze leaves that target or was idle, search targets using ENTER_TOLERANCE.
+   * Voronoi Proximity Hit Testing:
+   * Maps gaze to the nearest interactive button edge within a generous 320px reach.
+   * Eliminates the 'missed bounding box' problem of webcam eye tracking!
    */
-  private findHoveredTargetWithHysteresis(point: Point2D): string | null {
-    // Check if still within the currently active target (using exit hysteresis)
+  private findHoveredTargetWithProximity(point: Point2D): string | null {
+    // If still comfortably near the active target, retain it (hysteresis)
     if (this.lastHoveredTargetId) {
       const current = this.targets.get(this.lastHoveredTargetId);
       if (current && !current.disabled && current.element) {
         if (!(current.isArticleReadingArea && this.isReadingModeActive)) {
           const rect = current.element.getBoundingClientRect();
-          if (
-            point.x >= rect.left - this.exitTolerancePx &&
-            point.x <= rect.right + this.exitTolerancePx &&
-            point.y >= rect.top - this.exitTolerancePx &&
-            point.y <= rect.bottom + this.exitTolerancePx
-          ) {
-            return this.lastHoveredTargetId; // Retain active target!
+          const dx = Math.max(rect.left - point.x, 0, point.x - rect.right);
+          const dy = Math.max(rect.top - point.y, 0, point.y - rect.bottom);
+          const edgeDist = Math.sqrt(dx * dx + dy * dy);
+          if (edgeDist <= 160) {
+            return this.lastHoveredTargetId;
           }
         }
       }
     }
 
-    // Otherwise, check all targets using enter tolerance
+    // Otherwise, search for the closest target on screen
     let closestId: string | null = null;
-    let closestDistSq = Infinity;
+    let closestScore = Infinity;
+    const MAX_EDGE_DISTANCE = 320; // 320px reach
 
     for (const [id, target] of this.targets.entries()) {
       if (target.disabled) continue;
@@ -238,18 +286,18 @@ export class SelectionManager {
 
       if (target.element) {
         const rect = target.element.getBoundingClientRect();
-        const inBounds =
-          point.x >= rect.left - this.enterTolerancePx &&
-          point.x <= rect.right + this.enterTolerancePx &&
-          point.y >= rect.top - this.enterTolerancePx &&
-          point.y <= rect.bottom + this.enterTolerancePx;
+        const dx = Math.max(rect.left - point.x, 0, point.x - rect.right);
+        const dy = Math.max(rect.top - point.y, 0, point.y - rect.bottom);
+        const edgeDist = Math.sqrt(dx * dx + dy * dy);
 
-        if (inBounds) {
+        if (edgeDist <= MAX_EDGE_DISTANCE) {
           const cx = rect.left + rect.width / 2;
           const cy = rect.top + rect.height / 2;
-          const distSq = (point.x - cx) ** 2 + (point.y - cy) ** 2;
-          if (distSq < closestDistSq) {
-            closestDistSq = distSq;
+          const centerDist = Math.sqrt((point.x - cx) ** 2 + (point.y - cy) ** 2);
+          const score = edgeDist * 2.0 + centerDist * 0.5;
+
+          if (score < closestScore) {
+            closestScore = score;
             closestId = id;
           }
         }
