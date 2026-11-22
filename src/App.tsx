@@ -36,6 +36,7 @@ import { DiagnosticPanel } from './components/DiagnosticPanel';
 import { RestModeOverlay } from './components/RestModeOverlay';
 import { TrackingRecoveryBanner } from './components/TrackingRecoveryBanner';
 import { TrackingAcousticFeedback } from './services/TrackingAcousticFeedback';
+import { ExtensionBridge } from './services/ExtensionBridge';
 import { SosModal } from './components/SosModal';
 
 import { SetupPage } from './pages/SetupPage';
@@ -210,6 +211,7 @@ export const App: React.FC = () => {
                   { x: pred.filteredX, y: pred.filteredY },
                   pred.confidence
                 );
+                ExtensionBridge.getInstance().sendGazePoint(pred.filteredX, pred.filteredY, pred.confidence);
               } else {
                 selectionManager.cancel();
               }
@@ -243,6 +245,7 @@ export const App: React.FC = () => {
               { x: pred.filteredX, y: pred.filteredY },
               pred.confidence
             );
+            ExtensionBridge.getInstance().sendGazePoint(pred.filteredX, pred.filteredY, pred.confidence);
           }
         }
       },

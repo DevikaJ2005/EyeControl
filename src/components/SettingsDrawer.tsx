@@ -10,7 +10,8 @@ import { UserAccessibilitySettings, InputMode } from '../types/tracking';
 import { DwellButton } from './DwellButton';
 import { SpeechEngine } from '../speech/SpeechEngine';
 import { CalibrationStorage } from '../storage/CalibrationStorage';
-import { X, Volume2, Eye, Compass, RefreshCw, Trash2, Check } from 'lucide-react';
+import { ExtensionBridge } from '../services/ExtensionBridge';
+import { X, Volume2, Eye, Compass, RefreshCw, Trash2, Check, Chrome, Link } from 'lucide-react';
 
 interface SettingsDrawerProps {
   isOpen: boolean;
@@ -234,6 +235,57 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
             }}
             placeholder="+1 555-0199"
           />
+        </section>
+
+        {/* 7. Chrome Extension Real Web Controller */}
+        <section style={{ display: 'flex', flexDirection: 'column', gap: '10px', backgroundColor: '#F8FAFC', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Chrome size={20} color="#0088FF" />
+            <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+              Chrome Extension Link
+            </h3>
+          </div>
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.4 }}>
+            Control real YouTube & India Today tabs. Paste your unpacked extension ID from <code>chrome://extensions</code>:
+          </p>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              id="input-extension-id"
+              type="text"
+              defaultValue={ExtensionBridge.getInstance().getExtensionId() || ''}
+              onChange={(e) => ExtensionBridge.getInstance().setExtensionId(e.target.value.trim())}
+              placeholder="e.g. jfnbgclplh..."
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)',
+                fontSize: '0.85rem',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById('input-extension-id') as HTMLInputElement;
+                if (el) ExtensionBridge.getInstance().setExtensionId(el.value.trim());
+              }}
+              style={{
+                padding: '8px 14px',
+                backgroundColor: '#0088FF',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: 'var(--radius-sm)',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+              }}
+            >
+              Connect
+            </button>
+          </div>
+          <div style={{ fontSize: '0.78rem', color: ExtensionBridge.getInstance().getIsConnected() ? '#16A34A' : '#64748B', fontWeight: 600 }}>
+            {ExtensionBridge.getInstance().getIsConnected() ? '✓ Connected to Chrome Extension' : 'Status: Ready to bridge'}
+          </div>
         </section>
 
         {/* 7. Delete Saved Calibration */}
