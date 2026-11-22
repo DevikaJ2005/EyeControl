@@ -52,7 +52,7 @@ export type ActivePage = 'setup' | 'calibration' | 'home' | 'speak' | 'youtube' 
 
 export const App: React.FC = () => {
   // Navigation & Settings State
-  const [currentPage, setCurrentPage] = useState<ActivePage>('setup');
+  const [currentPage, setCurrentPage] = useState<ActivePage>('home');
   const [isSosOpen, setIsSosOpen] = useState(false);
   const [settings, setSettings] = useState<UserAccessibilitySettings>(DEFAULT_SETTINGS);
   const settingsRef = useRef<UserAccessibilitySettings>(DEFAULT_SETTINGS);
@@ -205,13 +205,13 @@ export const App: React.FC = () => {
                 pred.confidence.reason
               );
 
-              // Update selection engine only when gaze is reliable; otherwise pause/cancel
-              if (pred.confidence.isReliable) {
+              // Update selection engine whenever face is present and gaze is within screen bounds
+              if (!pred.confidence.isFaceLost && !pred.confidence.isOutOfBounds && !pred.confidence.isPoseExtreme) {
                 selectionManager.update(
                   { x: pred.filteredX, y: pred.filteredY },
                   pred.confidence
                 );
-              } else {
+              } else if (pred.confidence.isFaceLost) {
                 selectionManager.cancel();
               }
 
@@ -292,6 +292,18 @@ export const App: React.FC = () => {
           TrackingStateManager.getInstance().setHasCalibratedHead(true);
         }
       });
+      // Auto-start camera with persistent video element for immediate hands-free control
+      if (hiddenVideoRef.current) {
+        cameraManager.startCamera(hiddenVideoRef.current).then((started) => {
+          if (started) {
+            if (loadedSettings.inputMode === 'head') {
+              headTracker.start();
+            } else {
+              eyeTracker.start();
+            }
+          }
+        });
+      }
     });
 
     return () => {

@@ -85,16 +85,16 @@ export const EyeCursor: React.FC<EyeCursorProps> = ({
             width: '36px',
             height: '36px',
             borderRadius: '50%',
-            border: isReliable
-              ? isDwelling
-                ? '2px solid rgba(0, 136, 255, 0.7)'
-                : '2px solid rgba(15, 37, 55, 0.45)'
-              : '2px dashed rgba(220, 38, 38, 0.7)',
+            border: isDwelling
+              ? '2px solid rgba(0, 136, 255, 0.9)'
+              : isReliable
+                ? '2px solid rgba(15, 37, 55, 0.45)'
+                : '2px solid rgba(37, 99, 235, 0.55)',
             backgroundColor: isDwelling
-              ? 'rgba(0, 136, 255, 0.12)'
+              ? 'rgba(0, 136, 255, 0.15)'
               : 'rgba(15, 37, 55, 0.06)',
             boxShadow: isDwelling
-              ? '0 0 12px rgba(0, 136, 255, 0.45)'
+              ? '0 0 16px rgba(0, 136, 255, 0.55)'
               : '0 2px 8px rgba(15, 23, 42, 0.15)',
             transform: isDwelling ? 'scale(1.2)' : 'scale(1.0)',
             transition: 'all 100ms ease-out',
@@ -136,11 +136,11 @@ export const EyeCursor: React.FC<EyeCursorProps> = ({
             width: isDwelling ? '10px' : '8px',
             height: isDwelling ? '10px' : '8px',
             borderRadius: '50%',
-            backgroundColor: isReliable
-              ? isDwelling
-                ? '#0088FF'
-                : '#0F2537'
-              : '#DC2626',
+            backgroundColor: isDwelling
+              ? '#0088FF'
+              : isReliable
+                ? '#0F2537'
+                : '#2563EB',
             boxShadow: isDwelling ? '0 0 8px #0088FF' : 'none',
             transition: 'all 80ms ease-out',
           }}

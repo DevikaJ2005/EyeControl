@@ -76,8 +76,8 @@ export class DwellEngine {
     confidence: GazeConfidenceResult,
     now: number = performance.now()
   ): void {
-    // 1. If tracking confidence is lost, face lost, or out of bounds: cancel immediately for safety
-    if (!confidence.isReliable || confidence.isFaceLost || confidence.isOutOfBounds) {
+    // 1. If face is completely lost, extreme pose, or out of screen bounds: cancel immediately for safety
+    if (confidence.isFaceLost || confidence.isOutOfBounds || confidence.isPoseExtreme) {
       this.resetDwell();
       return;
     }

@@ -189,16 +189,16 @@ export class EyeTracker {
       }
     }
 
-    // 5. Apply OneEuroFilter only when tracking is reliable and within bounds
+    // 5. Apply OneEuroFilter whenever face is tracked and user is not blinking
     let filteredX = rawX;
     let filteredY = rawY;
 
-    if (confidence.isReliable) {
+    if (!confidence.isFaceLost && !confidence.isBlinking) {
       const filtered = this.filter.filter(rawX, rawY, timestamp);
       filteredX = filtered.x;
       filteredY = filtered.y;
     } else if (this.lastPrediction) {
-      // Freeze position when confidence is low or out of bounds rather than jumping wildly
+      // Freeze position during blinks or when face is completely lost rather than jumping wildly
       filteredX = this.lastPrediction.filteredX;
       filteredY = this.lastPrediction.filteredY;
       rawX = this.lastPrediction.rawX;
