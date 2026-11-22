@@ -153,6 +153,20 @@ export class EyeTracker {
       normPos = pred.normalized;
       rawX = pred.pixel.x;
       rawY = pred.pixel.y;
+    } else if (eyeLandmarks) {
+      // Uncalibrated geometric gaze approximation combining pupil offset & head orientation
+      // Mirrors camera frame horizontally so looking right moves gaze right
+      const avgIrisX = (eyeLandmarks.leftNormalizedIris.x + eyeLandmarks.rightNormalizedIris.x) / 2;
+      const avgIrisY = (eyeLandmarks.leftOpenness > 0.05 && eyeLandmarks.rightOpenness > 0.05)
+        ? (eyeLandmarks.leftNormalizedIris.y + eyeLandmarks.rightNormalizedIris.y) / 2
+        : 0.5;
+
+      const normX = Math.max(0.02, Math.min(0.98, 0.5 - headPose.yaw * 1.8 - (avgIrisX - 0.5) * 2.2));
+      const normY = Math.max(0.02, Math.min(0.98, 0.5 + headPose.pitch * 2.0 + (avgIrisY - 0.5) * 2.2));
+      normPos = { x: normX, y: normY };
+      const pixel = CoordinateManager.normalizedToViewportPixels(normPos, vp);
+      rawX = pixel.x;
+      rawY = pixel.y;
     }
 
     // 5. Evaluate confidence with out-of-bounds rejection and validation check

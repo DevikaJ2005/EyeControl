@@ -211,9 +211,17 @@ export const App: React.FC = () => {
                   { x: pred.filteredX, y: pred.filteredY },
                   pred.confidence
                 );
-                ExtensionBridge.getInstance().sendGazePoint(pred.filteredX, pred.filteredY, pred.confidence);
               } else {
                 selectionManager.cancel();
+              }
+
+              // Always stream gaze coordinates to Chrome Extension when face is detected and not blinking
+              if (!pred.confidence.isFaceLost && !pred.confidence.isBlinking) {
+                ExtensionBridge.getInstance().sendGazePoint(
+                  pred.filteredX,
+                  pred.filteredY,
+                  pred.confidence.confidence
+                );
               }
             }
           }

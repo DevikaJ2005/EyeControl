@@ -9,6 +9,7 @@ export class ExtensionBridge {
   private extensionId: string | null = null;
   private isConnected: boolean = false;
   private lastStreamTime: number = 0;
+  private broadcastChannel: BroadcastChannel | null = null;
 
   public static getInstance(): ExtensionBridge {
     if (!ExtensionBridge.instance) {
@@ -19,6 +20,26 @@ export class ExtensionBridge {
 
   private constructor() {
     this.detectExtension();
+    this.initAutoBridge();
+  }
+
+  private initAutoBridge(): void {
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        this.broadcastChannel = new BroadcastChannel('eyecontrol_gaze_channel');
+      }
+    } catch {
+      // BroadcastChannel unsupported or restricted
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'EYECONTROL_EXTENSION_INSTALLED') {
+          this.isConnected = true;
+          console.log('[ExtensionBridge] Auto-bridge extension detected and connected!');
+        }
+      });
+    }
   }
 
   public detectExtension(): void {
@@ -67,27 +88,49 @@ export class ExtensionBridge {
 
   /**
    * Stream gaze coordinates to Chrome Extension at ~30 FPS
+   * Broadcasts via postMessage and BroadcastChannel for automatic zero-config bridging,
+   * as well as direct chrome.runtime.sendMessage if extensionId is configured.
    */
   public sendGazePoint(x: number, y: number, confidence: any): void {
-    if (!this.extensionId) return;
-
     const now = performance.now();
-    if (now - this.lastStreamTime < 32) return; // ~30 FPS throttle
+    if (now - this.lastStreamTime < 30) return; // ~33 FPS throttle
     this.lastStreamTime = now;
 
-    const chromeApi = (window as any).chrome;
-    if (chromeApi && chromeApi.runtime && chromeApi.runtime.sendMessage) {
+    const payload = {
+      x,
+      y,
+      confidence: typeof confidence === 'number' ? confidence : 1.0,
+      timestamp: Date.now(),
+    };
+
+    // 1. PostMessage auto-bridge (bridge_injector.js receives this on localhost)
+    if (typeof window !== 'undefined') {
+      window.postMessage({ type: 'EYECONTROL_GAZE_STREAM', payload }, '*');
+    }
+
+    // 2. BroadcastChannel
+    if (this.broadcastChannel) {
       try {
-        chromeApi.runtime.sendMessage(
-          this.extensionId,
-          {
-            type: 'EYECONTROL_GAZE_UPDATE',
-            payload: { x, y, confidence },
-          },
-          () => {}
-        );
-      } catch {
-        // Extension may have reloaded
+        this.broadcastChannel.postMessage({ type: 'EYECONTROL_GAZE_STREAM', payload });
+      } catch {}
+    }
+
+    // 3. Direct chrome.runtime.sendMessage if extension ID is configured
+    if (this.extensionId) {
+      const chromeApi = (window as any).chrome;
+      if (chromeApi && chromeApi.runtime && chromeApi.runtime.sendMessage) {
+        try {
+          chromeApi.runtime.sendMessage(
+            this.extensionId,
+            {
+              type: 'EYECONTROL_GAZE_UPDATE',
+              payload,
+            },
+            () => {}
+          );
+        } catch {
+          // Extension may have reloaded
+        }
       }
     }
   }

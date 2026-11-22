@@ -23,6 +23,8 @@ export class CameraManager {
   private lastFpsUpdateTime: number = 0;
   private currentFps: number = 0;
   private isProcessingFrame: boolean = false;
+  private backgroundIntervalId: any = null;
+  private visibilityHandler: (() => void) | null = null;
 
   private diagnosticInfo: CameraDiagnosticInfo = {
     deviceId: '',
@@ -124,6 +126,14 @@ export class CameraManager {
   public stopCamera(): void {
     this.isRunning = false;
     this.isProcessingFrame = false;
+    if (this.backgroundIntervalId) {
+      clearInterval(this.backgroundIntervalId);
+      this.backgroundIntervalId = null;
+    }
+    if (this.visibilityHandler) {
+      document.removeEventListener('visibilitychange', this.visibilityHandler);
+      this.visibilityHandler = null;
+    }
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
@@ -188,6 +198,27 @@ export class CameraManager {
     } else {
       this.animationFrameId = requestAnimationFrame(handleFrame);
     }
+
+    // Background tab throttling prevention:
+    // When the user focuses YouTube or India Today, Chrome throttles RAF down to 0 FPS.
+    // This watchdog timer continues triggering camera frame detection in the background.
+    this.visibilityHandler = () => {
+      if (document.hidden && this.isRunning) {
+        if (!this.backgroundIntervalId) {
+          this.backgroundIntervalId = setInterval(() => {
+            if (this.isRunning && this.videoElement) {
+              handleFrame(performance.now());
+            }
+          }, 33); // ~30 FPS background ticker
+        }
+      } else {
+        if (this.backgroundIntervalId) {
+          clearInterval(this.backgroundIntervalId);
+          this.backgroundIntervalId = null;
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', this.visibilityHandler);
   }
 
   public updateVisionDiagnostics(
