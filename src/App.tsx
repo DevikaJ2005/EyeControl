@@ -36,19 +36,23 @@ import { DiagnosticPanel } from './components/DiagnosticPanel';
 import { RestModeOverlay } from './components/RestModeOverlay';
 import { TrackingRecoveryBanner } from './components/TrackingRecoveryBanner';
 import { TrackingAcousticFeedback } from './services/TrackingAcousticFeedback';
+import { SosModal } from './components/SosModal';
 
 import { SetupPage } from './pages/SetupPage';
 import { CalibrationPage } from './pages/CalibrationPage';
 import { HomePage } from './pages/HomePage';
 import { SpeakPage } from './pages/SpeakPage';
+import { NewsPage } from './pages/NewsPage';
+import { YouTubePage } from './pages/YouTubePage';
 import { ExplorePage } from './pages/ExplorePage';
 import { HelpPage } from './pages/HelpPage';
 
-export type ActivePage = 'setup' | 'calibration' | 'home' | 'speak' | 'explore' | 'help';
+export type ActivePage = 'setup' | 'calibration' | 'home' | 'speak' | 'youtube' | 'news' | 'explore' | 'help';
 
 export const App: React.FC = () => {
   // Navigation & Settings State
   const [currentPage, setCurrentPage] = useState<ActivePage>('setup');
+  const [isSosOpen, setIsSosOpen] = useState(false);
   const [settings, setSettings] = useState<UserAccessibilitySettings>(DEFAULT_SETTINGS);
   const settingsRef = useRef<UserAccessibilitySettings>(DEFAULT_SETTINGS);
   settingsRef.current = settings;
@@ -355,7 +359,7 @@ export const App: React.FC = () => {
         muted
       />
 
-      {/* Persistent Accessible Header Bar */}
+      {/* Persistent Accessible Header Bar with Live Clock & SOS */}
       <CameraStatus
         diagnosticInfo={diagnosticInfo}
         mode={settings.inputMode}
@@ -363,6 +367,7 @@ export const App: React.FC = () => {
         isPaused={isPaused}
         onToggleRest={handleToggleRest}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onTriggerSos={() => setIsSosOpen(true)}
         showBackHome={currentPage !== 'home'}
         onNavigateHome={() => setCurrentPage('home')}
         isCalibrated={!!calibrationResult?.passed}
@@ -414,7 +419,27 @@ export const App: React.FC = () => {
         )}
 
         {currentPage === 'home' && (
-          <HomePage onNavigate={(p) => setCurrentPage(p)} />
+          <HomePage
+            onNavigate={(p) => {
+              if (p === 'settings') {
+                setIsSettingsOpen(true);
+              } else if (p === 'calibration') {
+                setCurrentPage('calibration');
+              } else {
+                setCurrentPage(p as ActivePage);
+              }
+            }}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onToggleRest={handleToggleRest}
+          />
+        )}
+
+        {currentPage === 'news' && (
+          <NewsPage onNavigateHome={() => setCurrentPage('home')} />
+        )}
+
+        {currentPage === 'youtube' && (
+          <YouTubePage onNavigateHome={() => setCurrentPage('home')} />
         )}
 
         {currentPage === 'speak' && (
@@ -422,7 +447,7 @@ export const App: React.FC = () => {
         )}
 
         {currentPage === 'explore' && (
-          <ExplorePage onNavigateHome={() => setCurrentPage('home')} />
+          <NewsPage onNavigateHome={() => setCurrentPage('home')} />
         )}
 
         {currentPage === 'help' && (
@@ -433,6 +458,18 @@ export const App: React.FC = () => {
           />
         )}
       </div>
+
+      {/* Persistent SOS Emergency Modal Dialog */}
+      <SosModal
+        isOpen={isSosOpen}
+        emergencyContactName={settings.emergencyContactName}
+        emergencyContactPhone={settings.emergencyContactPhone}
+        onClose={() => setIsSosOpen(false)}
+        onNavigateHome={() => {
+          setIsSosOpen(false);
+          setCurrentPage('home');
+        }}
+      />
 
       {/* Visual Tracking Recovery Alert Banner */}
       <TrackingRecoveryBanner

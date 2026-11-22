@@ -1,7 +1,10 @@
 /**
  * DwellButton
- * Accessible, large target button with integrated dwell selection,
- * radial progress feedback, keyboard/mouse fallback, and high-contrast focus states.
+ * Accessible, gaze-optimized interactive button with:
+ * - Prominent Blue Gaze Selection Ring (#0088FF) matching professional AT design
+ * - Circular SVG progress indicator + linear baseline bar
+ * - Magnetic attraction styling and active card lift
+ * - Keyboard & mouse fallback for caregivers
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -19,6 +22,7 @@ interface DwellButtonProps {
   size?: 'normal' | 'large' | 'card';
   ariaLabel?: string;
   allowInRestMode?: boolean;
+  showCenterRing?: boolean; // When true, renders the prominent center blue ring shown in reference designs
 }
 
 export const DwellButton: React.FC<DwellButtonProps> = ({
@@ -32,6 +36,7 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
   size = 'normal',
   ariaLabel,
   allowInRestMode = false,
+  showCenterRing = false,
 }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [progress, setProgress] = useState(0);
@@ -80,34 +85,39 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
     switch (variant) {
       case 'primary':
         return {
-          background: isSelected ? 'var(--primary-active)' : 'var(--primary)',
+          background: isSelected ? '#0A1B28' : 'var(--primary)',
           color: 'var(--text-inverse)',
-          border: '2px solid var(--primary-hover)',
+          border: isDwelling ? '2px solid var(--gaze-blue)' : '2px solid var(--primary)',
+          boxShadow: isDwelling ? 'var(--shadow-blue-glow)' : 'var(--shadow-subtle)',
         };
       case 'emergency':
         return {
-          background: isSelected ? 'var(--emergency-hover)' : 'var(--emergency-surface)',
-          color: 'var(--emergency)',
-          border: '3px solid var(--emergency)',
+          background: isSelected ? 'var(--emergency-hover)' : 'var(--emergency)',
+          color: '#FFFFFF',
+          border: isDwelling ? '2px solid #FFFFFF' : '2px solid var(--emergency)',
+          boxShadow: isDwelling ? '0 0 0 3px rgba(220, 38, 38, 0.4)' : 'var(--shadow-subtle)',
         };
       case 'sage':
         return {
-          background: 'var(--surface-sage)',
-          color: 'var(--text-primary)',
-          border: '2px solid var(--border-strong)',
+          background: isSelected ? 'var(--surface-blue-strong)' : 'var(--surface-blue)',
+          color: 'var(--secondary)',
+          border: isDwelling ? '2px solid var(--gaze-blue)' : '2px solid #BFDBFE',
+          boxShadow: isDwelling ? 'var(--shadow-blue-glow)' : 'var(--shadow-subtle)',
         };
       case 'ghost':
         return {
-          background: 'transparent',
+          background: isDwelling ? 'var(--surface-blue)' : 'transparent',
           color: 'var(--text-primary)',
-          border: '2px solid var(--border)',
+          border: isDwelling ? '2px solid var(--gaze-blue)' : '2px solid var(--border)',
+          boxShadow: isDwelling ? 'var(--shadow-blue-glow)' : 'none',
         };
       case 'surface':
       default:
         return {
-          background: 'var(--surface)',
+          background: isDwelling ? 'var(--surface-blue)' : 'var(--surface)',
           color: 'var(--text-primary)',
-          border: '2px solid var(--border)',
+          border: isDwelling ? '2px solid var(--gaze-blue)' : '2px solid var(--border)',
+          boxShadow: isDwelling ? 'var(--shadow-blue-glow)' : 'var(--shadow-card)',
         };
     }
   };
@@ -116,23 +126,23 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
     switch (size) {
       case 'card':
         return {
-          minHeight: '160px',
+          minHeight: '180px',
           padding: '24px',
           fontSize: 'var(--font-size-lg)',
           borderRadius: 'var(--radius-lg)',
         };
       case 'large':
         return {
-          minHeight: '80px',
-          padding: '18px 28px',
+          minHeight: '76px',
+          padding: '16px 26px',
           fontSize: 'var(--font-size-md)',
           borderRadius: 'var(--radius-md)',
         };
       case 'normal':
       default:
         return {
-          minHeight: '64px',
-          padding: '14px 22px',
+          minHeight: '56px',
+          padding: '12px 20px',
           fontSize: 'var(--font-size-base)',
           borderRadius: 'var(--radius-md)',
         };
@@ -156,11 +166,8 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
         alignItems: 'center',
         justifyContent: 'center',
         fontWeight: 600,
-        boxShadow: isDwelling ? 'var(--shadow-active)' : 'var(--shadow-subtle)',
-        outline: isDwelling ? '4px solid var(--focus)' : 'none',
-        outlineOffset: '2px',
-        transform: isDwelling ? 'scale(1.02)' : 'scale(1.0)',
-        transition: 'transform var(--transition-fast), box-shadow var(--transition-fast), outline var(--transition-fast)',
+        transform: isDwelling ? 'scale(1.02)' : isSelected ? 'scale(0.98)' : 'scale(1.0)',
+        transition: 'all 120ms ease-out',
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.45 : 1,
         overflow: 'hidden',
@@ -170,32 +177,80 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
       }}
       className={`dwell-button ${isDwelling ? 'is-dwelling' : ''} ${className}`}
     >
-      {/* Background progress fill */}
+      {/* Background progress fill line */}
       {progress > 0 && (
         <span
           style={{
             position: 'absolute',
             bottom: 0,
             left: 0,
-            height: '6px',
+            height: '5px',
             width: `${Math.round(progress * 100)}%`,
-            backgroundColor: variant === 'emergency' ? 'var(--emergency)' : 'var(--focus)',
+            backgroundColor: variant === 'emergency' ? '#DC2626' : '#0088FF',
             transition: 'width 60ms linear',
             borderRadius: '0 0 var(--radius-md) var(--radius-md)',
+            zIndex: 3,
           }}
         />
       )}
 
-      {/* Circular dwell progress indicator on top right */}
-      {isDwelling && (
+      {/* Prominent Blue Gaze Selection Ring for Card/Center Targets */}
+      {(showCenterRing || size === 'card') && isDwelling && (
         <div
           style={{
             position: 'absolute',
-            top: '10px',
-            right: '10px',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '120px',
+            height: '120px',
+            pointerEvents: 'none',
+            zIndex: 4,
+          }}
+          aria-hidden="true"
+        >
+          <svg width="120" height="120" viewBox="0 0 120 120">
+            {/* Soft background track */}
+            <circle
+              cx="60"
+              cy="60"
+              r="52"
+              fill="rgba(0, 136, 255, 0.08)"
+              stroke="rgba(0, 136, 255, 0.25)"
+              strokeWidth="5"
+            />
+            {/* Active animated stroke fill */}
+            <circle
+              cx="60"
+              cy="60"
+              r="52"
+              fill="none"
+              stroke="#0088FF"
+              strokeWidth="6"
+              strokeLinecap="round"
+              strokeDasharray={326.7}
+              strokeDashoffset={326.7 * (1 - progress)}
+              style={{
+                transform: 'rotate(-90deg)',
+                transformOrigin: '50% 50%',
+                filter: 'drop-shadow(0 0 6px rgba(0, 136, 255, 0.6))',
+              }}
+            />
+          </svg>
+        </div>
+      )}
+
+      {/* Standard top-right Blue Dwell Progress Ring */}
+      {isDwelling && !showCenterRing && size !== 'card' && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '8px',
+            right: '8px',
             width: '28px',
             height: '28px',
             pointerEvents: 'none',
+            zIndex: 4,
           }}
           aria-hidden="true"
         >
@@ -203,21 +258,22 @@ export const DwellButton: React.FC<DwellButtonProps> = ({
             <path
               d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               fill="none"
-              stroke="rgba(66, 104, 90, 0.2)"
+              stroke="rgba(0, 136, 255, 0.25)"
               strokeWidth="4"
             />
             <path
               d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               fill="none"
-              stroke={variant === 'emergency' ? '#A75B51' : '#42685A'}
-              strokeWidth="4"
+              stroke="#0088FF"
+              strokeWidth="4.5"
+              strokeLinecap="round"
               strokeDasharray={`${Math.round(progress * 100)}, 100`}
             />
           </svg>
         </div>
       )}
 
-      <span style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <span style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: '12px', width: '100%', height: '100%' }}>
         {children}
       </span>
     </button>

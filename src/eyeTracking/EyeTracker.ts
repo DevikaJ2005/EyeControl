@@ -34,8 +34,8 @@ export class EyeTracker {
     this.gazeModel = gazeModel;
     this.confidenceEstimator = new GazeConfidence();
     this.adaptiveTracker = new AdaptiveEyeRegionTracker(configMode);
-    // 30 Hz, minCutoff: 0.8 Hz (steady when holding gaze), beta: 0.007 (snappy saccades)
-    this.filter = new OneEuroFilter2D(30, 0.8, 0.007);
+    // 30 Hz, minCutoff: 0.25 Hz (rock-steady fixation), beta: 0.008 (snappy saccades), deadband: 3.5px
+    this.filter = new OneEuroFilter2D(30, 0.25, 0.008, 1.0, 3.5);
   }
 
   public getAdaptiveTracker(): AdaptiveEyeRegionTracker {

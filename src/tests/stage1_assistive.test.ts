@@ -48,6 +48,7 @@ describe('Stage 1 — Critical Assistive Interaction Fixes', () => {
 
   describe('1. Accidental Selection Prevention & Dwell Cancellation', () => {
     it('cancels ongoing dwell immediately when gaze leaves the target', () => {
+      dwellEngine.setGracePeriod(0); // Test zero-grace immediate cancellation
       let progressValues: number[] = [];
       const unsub = dwellEngine.subscribe((update) => {
         progressValues.push(update.progress);

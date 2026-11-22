@@ -2,9 +2,11 @@
  * OneEuroFilter (1€ Filter)
  * Reference: Casiez, G., Roussel, N. and Vogel, F. (2012)
  * 1€ Filter: A simple speed-based low-pass filter for noisy input in interactive systems.
- * CHI 2012.
  *
- * Provides smooth, low-latency filtering for gaze points and head pose.
+ * Enhanced for Assistive Eye-Tracking:
+ * - Velocity-adaptive cutoff (0.2 Hz at rest for rock-steady fixations)
+ * - Snappy responsiveness during saccades
+ * - Micro-deadband (3.5px) during steady fixation to eliminate natural landmark tremor
  */
 
 class LowPassFilter {
@@ -57,16 +59,10 @@ export class OneEuroFilter {
   private dxFilter: LowPassFilter;
   private lastTime: number | null = null;
 
-  /**
-   * @param freq Target sampling frequency in Hz (default 30 for 30fps webcam)
-   * @param minCutoff Minimum cutoff frequency in Hz (lower = smoother when still, e.g. 1.0)
-   * @param beta Speed coefficient (higher = less lag during saccades/fast movements, e.g. 0.007)
-   * @param dCutoff Cutoff frequency for derivative calculation (default 1.0 Hz)
-   */
   constructor(
     private freq: number = 30,
-    private minCutoff: number = 1.0,
-    private beta: number = 0.007,
+    private minCutoff: number = 0.25,
+    private beta: number = 0.008,
     private dCutoff: number = 1.0
   ) {
     this.xFilter = new LowPassFilter(this.alpha(this.minCutoff));
@@ -114,28 +110,52 @@ export class OneEuroFilter {
 export class OneEuroFilter2D {
   private filterX: OneEuroFilter;
   private filterY: OneEuroFilter;
+  private lastFiltered: { x: number; y: number } | null = null;
+  private deadbandPx: number = 3.5;
 
   constructor(
     freq: number = 30,
-    minCutoff: number = 0.8,
-    beta: number = 0.005,
-    dCutoff: number = 1.0
+    minCutoff: number = 0.25,
+    beta: number = 0.008,
+    dCutoff: number = 1.0,
+    deadbandPx: number = 3.5
   ) {
     this.filterX = new OneEuroFilter(freq, minCutoff, beta, dCutoff);
     this.filterY = new OneEuroFilter(freq, minCutoff, beta, dCutoff);
+    this.deadbandPx = deadbandPx;
   }
 
   filter(x: number, y: number, timestamp?: number): { x: number; y: number } {
     const ts = timestamp ?? Date.now();
-    return {
-      x: this.filterX.filter(x, ts),
-      y: this.filterY.filter(y, ts),
-    };
+    const rawFilteredX = this.filterX.filter(x, ts);
+    const rawFilteredY = this.filterY.filter(y, ts);
+
+    if (!this.lastFiltered) {
+      this.lastFiltered = { x: rawFilteredX, y: rawFilteredY };
+      return { ...this.lastFiltered };
+    }
+
+    // Micro-deadband: Suppress micro-jitter (< 3.5px) during fixations
+    const dx = rawFilteredX - this.lastFiltered.x;
+    const dy = rawFilteredY - this.lastFiltered.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < this.deadbandPx) {
+      this.lastFiltered = {
+        x: this.lastFiltered.x * 0.92 + rawFilteredX * 0.08,
+        y: this.lastFiltered.y * 0.92 + rawFilteredY * 0.08,
+      };
+    } else {
+      this.lastFiltered = { x: rawFilteredX, y: rawFilteredY };
+    }
+
+    return { ...this.lastFiltered };
   }
 
   reset(): void {
     this.filterX.reset();
     this.filterY.reset();
+    this.lastFiltered = null;
   }
 
   updateParams(minCutoff: number, beta: number): void {

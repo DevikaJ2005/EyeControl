@@ -1,9 +1,10 @@
 /**
  * EyeCursor
  * Renders the calibrated gaze or head tracking pointer on the screen.
- * Displays confidence states, blink indicators, smooth movement, and
- * an integrated radial dwell progress ring so users can see activation timing
- * directly at their point of gaze.
+ * Displays:
+ * - Magnetic target snapping coordinates
+ * - Vibrant Blue Gaze Selection Ring (#0088FF) directly on cursor
+ * - Confidence state indicators & blink rejection
  */
 
 import React, { useEffect, useState } from 'react';
@@ -46,27 +47,32 @@ export const EyeCursor: React.FC<EyeCursorProps> = ({
     return null;
   }
 
+  // Check if magnetic target snapping is currently attracting the cursor
+  const snappedPoint = SelectionManager.getInstance().getSnappedGazePoint();
+  const renderX = snappedPoint ? snappedPoint.x : filteredX;
+  const renderY = snappedPoint ? snappedPoint.y : filteredY;
+
   const isDwelling = dwellProgress > 0 && dwellProgress < 1;
 
   return (
     <div
       style={{
         position: 'fixed',
-        left: `${Math.round(filteredX)}px`,
-        top: `${Math.round(filteredY)}px`,
+        left: `${Math.round(renderX)}px`,
+        top: `${Math.round(renderY)}px`,
         transform: 'translate(-50%, -50%)',
         pointerEvents: 'none',
         zIndex: 9999,
-        transition: 'transform 30ms linear',
+        transition: snappedPoint ? 'transform 80ms ease-out' : 'transform 20ms linear',
       }}
       aria-hidden="true"
     >
-      {/* Outer focus halo & Dwell Progress Ring */}
+      {/* Outer focus halo & Blue Selection Ring */}
       <div
         style={{
           position: 'relative',
-          width: '38px',
-          height: '38px',
+          width: '42px',
+          height: '42px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -76,27 +82,31 @@ export const EyeCursor: React.FC<EyeCursorProps> = ({
         <div
           style={{
             position: 'absolute',
-            width: '32px',
-            height: '32px',
+            width: '36px',
+            height: '36px',
             borderRadius: '50%',
             border: isReliable
-              ? '2px solid rgba(66, 104, 90, 0.6)'
-              : '2px dashed rgba(167, 91, 81, 0.7)',
-            backgroundColor: isReliable
-              ? 'rgba(66, 104, 90, 0.12)'
-              : 'rgba(167, 91, 81, 0.12)',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-            transform: isDwelling ? 'scale(1.15)' : 'scale(1.0)',
-            transition: 'transform 100ms ease-out',
+              ? isDwelling
+                ? '2px solid rgba(0, 136, 255, 0.7)'
+                : '2px solid rgba(15, 37, 55, 0.45)'
+              : '2px dashed rgba(220, 38, 38, 0.7)',
+            backgroundColor: isDwelling
+              ? 'rgba(0, 136, 255, 0.12)'
+              : 'rgba(15, 37, 55, 0.06)',
+            boxShadow: isDwelling
+              ? '0 0 12px rgba(0, 136, 255, 0.45)'
+              : '0 2px 8px rgba(15, 23, 42, 0.15)',
+            transform: isDwelling ? 'scale(1.2)' : 'scale(1.0)',
+            transition: 'all 100ms ease-out',
           }}
         />
 
-        {/* Circular SVG dwell progress arc */}
+        {/* Circular SVG Blue Gaze Progress Ring */}
         {dwellProgress > 0 && (
           <svg
-            width="38"
-            height="38"
-            viewBox="0 0 38 38"
+            width="42"
+            height="42"
+            viewBox="0 0 42 42"
             style={{
               position: 'absolute',
               transform: 'rotate(-90deg)',
@@ -104,15 +114,18 @@ export const EyeCursor: React.FC<EyeCursorProps> = ({
             }}
           >
             <circle
-              cx="19"
-              cy="19"
-              r="16"
+              cx="21"
+              cy="21"
+              r="18"
               fill="none"
-              stroke="#8CE4B2"
-              strokeWidth="3.5"
-              strokeDasharray="100.5"
-              strokeDashoffset={100.5 * (1 - dwellProgress)}
+              stroke="#0088FF"
+              strokeWidth="4"
+              strokeDasharray="113.1"
+              strokeDashoffset={113.1 * (1 - dwellProgress)}
               strokeLinecap="round"
+              style={{
+                filter: 'drop-shadow(0 0 4px rgba(0, 136, 255, 0.6))',
+              }}
             />
           </svg>
         )}
@@ -123,8 +136,12 @@ export const EyeCursor: React.FC<EyeCursorProps> = ({
             width: isDwelling ? '10px' : '8px',
             height: isDwelling ? '10px' : '8px',
             borderRadius: '50%',
-            backgroundColor: isReliable ? '#42685A' : '#A75B51',
-            boxShadow: isDwelling ? '0 0 8px #8CE4B2' : 'none',
+            backgroundColor: isReliable
+              ? isDwelling
+                ? '#0088FF'
+                : '#0F2537'
+              : '#DC2626',
+            boxShadow: isDwelling ? '0 0 8px #0088FF' : 'none',
             transition: 'all 80ms ease-out',
           }}
         />
@@ -135,12 +152,12 @@ export const EyeCursor: React.FC<EyeCursorProps> = ({
         <div
           style={{
             position: 'absolute',
-            top: '42px',
+            top: '44px',
             left: '50%',
             transform: 'translateX(-50%)',
             whiteSpace: 'nowrap',
-            backgroundColor: 'rgba(30, 42, 37, 0.95)',
-            color: '#F7F6F0',
+            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+            color: '#FFFFFF',
             fontSize: '11px',
             fontWeight: 700,
             padding: '4px 10px',
