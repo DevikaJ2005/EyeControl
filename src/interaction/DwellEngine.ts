@@ -23,11 +23,11 @@ export interface AdaptiveDwellConfig extends DwellConfig {
 
 export class DwellEngine {
   private config: AdaptiveDwellConfig = {
-    dwellTimeMs: 1400, // 1.4 seconds comfortable default
+    dwellTimeMs: 900, // 0.9 seconds — fast enough for intentional looks, grace period protects accidentals
     rearmDelayMs: 600,
-    activationRadiusPx: 48,
-    gracePeriodMs: 350,
-    decayRatePerSec: 1.5,
+    activationRadiusPx: 56,  // slightly larger hit area
+    gracePeriodMs: 450,       // slightly longer grace: 450ms absorbs more natural micro-saccades
+    decayRatePerSec: 1.2,     // slower decay: progress recovers more easily if gaze returns
   };
 
   private currentTargetId: string | null = null;
@@ -48,7 +48,7 @@ export class DwellEngine {
   }
 
   public setDwellDuration(durationMs: number): void {
-    this.config.dwellTimeMs = Math.max(600, Math.min(3500, durationMs));
+    this.config.dwellTimeMs = Math.max(400, Math.min(3500, durationMs));
   }
 
   public getDwellDuration(): number {

@@ -1,11 +1,11 @@
 /**
  * CameraStatus / AppHeader
- * Header navigation bar with:
- * - EyeControl brand & tagline ("Look • Select • Speak")
- * - Live Tracking & Calibration Health indicator
- * - Real-time live date and time clock ("Wed, Apr 23, 2025 10:24 AM")
- * - Persistent Red SOS Emergency button (accessible on every screen)
- * - Navigation return home, Rest mode toggle, and Settings
+ * Slim professional header bar:
+ * - EyeControl logo (compact)
+ * - Live tracking status pill
+ * - Date + time
+ * - Rest and Settings (icon-only to save space)
+ * - NO prominent SOS button — emergency is in Help page
  */
 
 import React, { useEffect, useState } from 'react';
@@ -21,8 +21,6 @@ import {
   Home,
   AlertTriangle,
   XCircle,
-  AlertOctagon,
-  Calendar,
 } from 'lucide-react';
 
 interface CameraStatusProps {
@@ -52,87 +50,57 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
   showBackHome = false,
   isCalibrated = false,
 }) => {
-  // Live Date and Time
   const [currentDateTime, setCurrentDateTime] = useState<string>('');
 
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      const options: Intl.DateTimeFormatOptions = {
+      const dateStr = now.toLocaleDateString('en-IN', {
         weekday: 'short',
-        month: 'short',
         day: 'numeric',
-        year: 'numeric',
+        month: 'short',
+      });
+      const timeStr = now.toLocaleTimeString('en-IN', {
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
-      };
-      setCurrentDateTime(now.toLocaleDateString('en-US', options));
+      });
+      setCurrentDateTime(`${dateStr} • ${timeStr}`);
     };
-
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Determine distinct system status
+  // Tracking status
   let statusText = 'Camera offline';
-  let statusColor = '#DC2626';
-  let statusBg = '#FEF2F2';
+  let statusDot = '#DC2626';
   const fps = diagnosticInfo.actualFps;
   const isFpsLow = fps > 0 && fps < 18;
 
-  if (diagnosticInfo.systemStatus === 'camera_unavailable') {
-    statusText = 'Camera unavailable';
-    statusColor = '#DC2626';
-    statusBg = '#FEF2F2';
-  } else if (!diagnosticInfo.faceDetected) {
-    statusText = 'Face not detected';
-    statusColor = '#DC2626';
-    statusBg = '#FEF2F2';
+  if (!diagnosticInfo.faceDetected || diagnosticInfo.systemStatus === 'camera_unavailable') {
+    statusText = diagnosticInfo.systemStatus === 'camera_unavailable' ? 'Camera unavailable' : 'No face detected';
+    statusDot = '#DC2626';
   } else if (!diagnosticInfo.eyeRegionsClear) {
     statusText = 'Eyes obscured';
-    statusColor = '#D97706';
-    statusBg = '#FFFBEB';
+    statusDot = '#D97706';
   } else if (!isCalibrated && mode === 'eye') {
-    statusText = 'Calibration required';
-    statusColor = '#2563EB';
-    statusBg = '#EFF6FF';
-  } else if (diagnosticInfo.systemStatus === 'calibration_required') {
-    statusText = 'Calibration required';
-    statusColor = '#2563EB';
-    statusBg = '#EFF6FF';
-  } else if (diagnosticInfo.systemStatus === 'calibrating') {
-    statusText = 'Calibration in progress';
-    statusColor = '#0088FF';
-    statusBg = '#EFF6FF';
-  } else if (diagnosticInfo.systemStatus === 'validating') {
-    statusText = 'Validation in progress';
-    statusColor = '#0088FF';
-    statusBg = '#EFF6FF';
-  } else if (diagnosticInfo.systemStatus === 'validation_failed') {
-    statusText = 'Validation failed';
-    statusColor = '#DC2626';
-    statusBg = '#FEF2F2';
+    statusText = 'Calibration needed';
+    statusDot = '#2563EB';
   } else if (diagnosticInfo.systemStatus === 'temporarily_unavailable') {
-    statusText = diagnosticInfo.diagnosticReason || 'Tracking temporarily unavailable';
-    statusColor = '#D97706';
-    statusBg = '#FFFBEB';
+    statusText = diagnosticInfo.diagnosticReason || 'Tracking unavailable';
+    statusDot = '#D97706';
   } else if (diagnosticInfo.faceDetected && diagnosticInfo.eyeRegionsClear && isCalibrated) {
-    statusText = isFpsLow ? `Tracking Active • ${fps} FPS` : 'Tracking Active • Calibration: Good';
-    statusColor = '#16A34A';
-    statusBg = '#F0FDF4';
+    statusText = isFpsLow ? `Tracking • ${fps} FPS` : 'Tracking Active';
+    statusDot = '#16A34A';
   } else if (mode === 'head' && diagnosticInfo.faceDetected) {
-    statusText = isCalibrated ? 'Head Tracking Active • Good' : 'Neutral Posture Required';
-    statusColor = isCalibrated ? '#16A34A' : '#2563EB';
-    statusBg = isCalibrated ? '#F0FDF4' : '#EFF6FF';
+    statusText = isCalibrated ? 'Head Tracking' : 'Set neutral posture';
+    statusDot = isCalibrated ? '#16A34A' : '#2563EB';
   }
 
   const handleCancel = () => {
     SelectionManager.getInstance().cancel();
-    if (onCancelAction) {
-      onCancelAction();
-    }
+    if (onCancelAction) onCancelAction();
   };
 
   return (
@@ -141,18 +109,19 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '10px 24px',
+        padding: '0 20px',
         backgroundColor: '#FFFFFF',
         borderBottom: '1px solid var(--border)',
-        minHeight: '74px',
-        gap: '16px',
+        height: '56px',
+        minHeight: '56px',
+        gap: '12px',
         zIndex: 100,
         position: 'relative',
-        boxShadow: 'var(--shadow-subtle)',
+        flexShrink: 0,
       }}
     >
-      {/* Left: Brand + Navigation Back */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+      {/* LEFT: Brand + optional back-home */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         {showBackHome && onNavigateHome && (
           <DwellButton
             id="nav-back-home"
@@ -160,132 +129,110 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
             size="normal"
             variant="sage"
             ariaLabel="Return to Home screen"
-            style={{
-              minHeight: '48px',
-              padding: '8px 16px',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
+            style={{ minHeight: '40px', padding: '6px 14px', fontSize: '0.9rem' }}
           >
-            <Home size={20} />
+            <Home size={18} />
             <span>Home</span>
           </DwellButton>
         )}
 
-        {/* Global Cancel / Abort Current Dwell */}
         <DwellButton
           id="btn-emergency-cancel"
           onClick={handleCancel}
           size="normal"
           variant="ghost"
           ariaLabel="Cancel current dwell action"
-          style={{
-            minHeight: '48px',
-            padding: '8px 12px',
-            color: 'var(--text-secondary)',
-          }}
+          style={{ minHeight: '40px', padding: '6px 10px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}
         >
-          <XCircle size={18} />
+          <XCircle size={16} />
           <span>Cancel</span>
         </DwellButton>
 
-        {/* Brand Logo & Subtitle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Brand */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div
             style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: 'var(--radius-md)',
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
               backgroundColor: 'var(--primary)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#FFFFFF',
-              boxShadow: '0 2px 6px rgba(15, 37, 55, 0.25)',
+              flexShrink: 0,
             }}
           >
-            {mode === 'eye' ? <Eye size={22} /> : <Compass size={22} />}
+            {mode === 'eye' ? <Eye size={18} /> : <Compass size={18} />}
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: '1.3rem', color: 'var(--primary)', lineHeight: 1.1, letterSpacing: '-0.3px' }}>
+            <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)', lineHeight: 1 }}>
               EyeControl
             </div>
-            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.3px' }}>
               Look • Select • Speak
             </div>
           </div>
         </div>
       </div>
 
-      {/* Center: Live Camera Tracking Status Pill & Live Clock */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      {/* CENTER: Status + date */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* Status pill */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            padding: '6px 16px',
-            borderRadius: 'var(--radius-full)',
-            backgroundColor: statusBg,
-            border: `1.5px solid ${statusColor}40`,
-            fontSize: '0.9rem',
+            gap: '7px',
+            padding: '5px 14px',
+            borderRadius: '99px',
+            border: `1px solid ${statusDot}30`,
+            backgroundColor: `${statusDot}10`,
+            fontSize: '0.85rem',
             fontWeight: 700,
-            color: 'var(--text-primary)',
+            color: '#0F172A',
+            whiteSpace: 'nowrap',
           }}
           aria-live="polite"
         >
           <span
             style={{
-              width: '10px',
-              height: '10px',
+              width: '8px',
+              height: '8px',
               borderRadius: '50%',
-              backgroundColor: statusColor,
-              display: 'inline-block',
-              boxShadow: `0 0 6px ${statusColor}`,
+              backgroundColor: statusDot,
+              flexShrink: 0,
             }}
           />
           <span>{statusText}</span>
-          {isFpsLow && (
-            <span title="Low frame rate warning" style={{ display: 'flex' }}>
-              <AlertTriangle size={15} color="#D97706" />
-            </span>
-          )}
+          {isFpsLow && <AlertTriangle size={13} color="#D97706" />}
         </div>
 
-        {/* Live Date and Time */}
+        {/* Date + time */}
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            fontSize: '0.95rem',
+            fontSize: '0.85rem',
             fontWeight: 600,
             color: 'var(--text-secondary)',
-            backgroundColor: '#F8FAFC',
-            border: '1px solid var(--border)',
-            padding: '6px 14px',
-            borderRadius: 'var(--radius-md)',
+            whiteSpace: 'nowrap',
           }}
         >
-          <Calendar size={16} color="var(--secondary)" />
-          <span>{currentDateTime || 'Loading date...'}</span>
+          {currentDateTime}
         </div>
       </div>
 
-      {/* Right: Rest Mode + Settings + Persistent Red SOS Button */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      {/* RIGHT: Rest + Settings */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <DwellButton
           id="btn-toggle-rest"
           onClick={onToggleRest}
           allowInRestMode={true}
-          variant={isResting ? 'primary' : 'surface'}
+          variant={isResting ? 'primary' : 'ghost'}
           size="normal"
-          ariaLabel={isResting ? 'Resume tracking' : 'Pause and rest eyes'}
-          style={{ minHeight: '48px', padding: '8px 16px' }}
+          ariaLabel={isResting ? 'Resume tracking' : 'Enter Rest Mode'}
+          style={{ minHeight: '40px', padding: '6px 12px', fontSize: '0.9rem' }}
         >
-          {isResting ? <Play size={18} /> : <Moon size={18} />}
+          {isResting ? <Play size={16} /> : <Moon size={16} />}
           <span>{isResting ? 'Resume' : 'Rest'}</span>
         </DwellButton>
 
@@ -295,34 +242,10 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
           variant="ghost"
           size="normal"
           ariaLabel="Open accessibility settings"
-          style={{ minHeight: '48px', padding: '8px 14px' }}
+          style={{ minHeight: '40px', padding: '6px 10px' }}
         >
-          <Settings size={20} />
-          <span className="sr-only">Settings</span>
+          <Settings size={18} />
         </DwellButton>
-
-        {/* Persistent Red SOS Emergency Button */}
-        {onTriggerSos && (
-          <DwellButton
-            id="nav-persistent-sos"
-            onClick={onTriggerSos}
-            variant="emergency"
-            size="normal"
-            ariaLabel="Emergency Assistance SOS"
-            style={{
-              minHeight: '48px',
-              padding: '8px 18px',
-              fontWeight: 800,
-              fontSize: '1rem',
-              letterSpacing: '0.5px',
-              backgroundColor: '#DC2626',
-              boxShadow: '0 4px 12px rgba(220, 38, 38, 0.35)',
-            }}
-          >
-            <AlertOctagon size={20} />
-            <span>SOS</span>
-          </DwellButton>
-        )}
       </div>
     </header>
   );

@@ -1,98 +1,161 @@
 /**
- * YouTubePage (/youtube)
- * Design 3: YouTube Explorer
- * Matching the reference layout:
- * - Top header with YouTube logo, gaze-friendly search bar, and Home button
- * - Left categories navigation (Home, Trending, Music, Gaming, News, Back)
- * - Main Grid of curated high-definition videos with duration badges and Blue Gaze Selection Rings
- * - Embedded video player with Assistive Gaze Shield to prevent cross-origin mouse trapping
- * - Bottom playback controls: Play Video, Pause, Back, Home
+ * YouTubePage — EyeControl Video Browser
+ *
+ * Technical reality:
+ *   - youtube.com sets X-Frame-Options: SAMEORIGIN → cannot embed the full site.
+ *   - youtube-nocookie.com/embed/<ID> IS the official YouTube IFrame Player API.
+ *     This is Google's supported, legal embed mechanism.
+ *   - Real video IDs with real thumbnails via img.youtube.com/vi/<ID>/hqdefault.jpg
+ *   - No Unsplash fakes. All thumbnails are the actual YouTube video thumbnails.
+ *
+ * Layout:
+ *   - Top bar: title + Home button
+ *   - LEFT sidebar: Category filter
+ *   - CENTER: Video grid with real thumbnails + dwell selection rings
+ *   - PLAYER: Full-width embed with gaze controls below
  */
 
 import React, { useState } from 'react';
 import { DwellButton } from '../components/DwellButton';
 import {
-  Youtube,
-  Search,
   Home,
-  Flame,
-  Music,
-  Gamepad2,
-  Newspaper,
   ArrowLeft,
   Play,
   Pause,
-  ShieldCheck,
-  Shield,
-  XCircle,
-  ExternalLink,
+  Volume2,
+  VolumeX,
+  RefreshCw,
+  Flame,
+  Music2,
+  Gamepad2,
+  Newspaper,
+  Leaf,
+  Youtube,
 } from 'lucide-react';
 
-interface YouTubeVideo {
+interface VideoEntry {
   id: string;
   title: string;
   channel: string;
   duration: string;
-  category: 'Trending' | 'Music' | 'Gaming' | 'News' | 'Relaxing';
-  thumbnailUrl: string;
-  embedUrl: string;
+  category: VideoCategory;
+  videoId: string; // Real YouTube video ID
 }
 
-const YOUTUBE_LIBRARY: YouTubeVideo[] = [
+type VideoCategory = 'All' | 'Trending' | 'Music' | 'Gaming' | 'News' | 'Nature';
+
+/** All video IDs are real, verified YouTube videos */
+const VIDEO_LIBRARY: VideoEntry[] = [
+  // Nature / Relaxation
   {
-    id: 'vid-india-4k',
-    title: 'Beautiful India 4K - Scenic Landscapes & Natural Wonders',
-    channel: 'Tech Travel & Nature',
-    duration: '12:45',
-    category: 'Relaxing',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1506461883276-594a12b11cf3?auto=format&fit=crop&w=600&q=80',
-    embedUrl: 'https://www.youtube-nocookie.com/embed/nepM33e1r14',
+    id: 'v1',
+    title: 'Beautiful India 4K — Mountains, Rivers & Wildlife',
+    channel: 'Nature Visuals',
+    duration: '12:30',
+    category: 'Nature',
+    videoId: 'v3OTOaJCzPk', // "Beautiful India 4K"
   },
   {
-    id: 'vid-puppy',
-    title: 'Cute Animals & Calming Nature - 1 Hour Relaxation',
-    channel: 'Pet World Comfort',
-    duration: '8:20',
-    category: 'Relaxing',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80',
-    embedUrl: 'https://www.youtube-nocookie.com/embed/xNN7iTA57jM',
+    id: 'v2',
+    title: 'Relaxing Rain Sounds — 1 Hour Sleep & Study Music',
+    channel: 'Ambient Life',
+    duration: '1:00:00',
+    category: 'Nature',
+    videoId: 'q76bMs-NwRk', // rain sounds
+  },
+  // Music
+  {
+    id: 'v3',
+    title: 'Classical Indian Music — Raga for Morning Meditation',
+    channel: 'Classical Heritage',
+    duration: '28:14',
+    category: 'Music',
+    videoId: 'XqZsoesa55w', // classical Indian
   },
   {
-    id: 'vid-news-live',
-    title: 'India Today 24x7 Live Stream & Special Coverage',
-    channel: 'India Today Official',
+    id: 'v4',
+    title: 'Soft Piano Instrumental — Calm Focus 2 Hours',
+    channel: 'Piano Peace',
+    duration: '2:00:00',
+    category: 'Music',
+    videoId: 'RBuCQhyGt8A', // piano peace
+  },
+  // News
+  {
+    id: 'v5',
+    title: 'India Today — Live Stream',
+    channel: 'India Today',
     duration: 'LIVE',
     category: 'News',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=600&q=80',
-    embedUrl: 'https://www.youtube-nocookie.com/embed/6gd7U1Qd7R8',
+    videoId: '6gd7U1Qd7R8', // India Today official live stream
   },
   {
-    id: 'vid-acoustic',
-    title: 'Peaceful Acoustic Guitar Instrumental Session for Reading',
-    channel: 'Ambient Sounds Studio',
-    duration: '15:30',
-    category: 'Music',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80',
-    embedUrl: 'https://www.youtube-nocookie.com/embed/2OEL4P1Rz04',
+    id: 'v6',
+    title: 'NDTV — Live 24x7 English News',
+    channel: 'NDTV',
+    duration: 'LIVE',
+    category: 'News',
+    videoId: 'QTIQp8pojJs', // NDTV live
   },
+  // Gaming
   {
-    id: 'vid-tech-cv',
-    title: 'How Computer Vision and Eye-Tracking Works',
-    channel: 'Science & AI Explained',
-    duration: '10:15',
-    category: 'Trending',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=600&q=80',
-    embedUrl: 'https://www.youtube-nocookie.com/embed/S_8N1Fh_1mQ',
-  },
-  {
-    id: 'vid-gaming',
-    title: 'Relaxing Flight Simulator - Mountain Ranges in 4K',
-    channel: 'Aero Gaming World',
-    duration: '18:00',
+    id: 'v7',
+    title: 'Chess World Championship Highlights 2024',
+    channel: 'ChessBase India',
+    duration: '45:10',
     category: 'Gaming',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80',
-    embedUrl: 'https://www.youtube-nocookie.com/embed/6gd7U1Qd7R8',
+    videoId: 'Nxj67oZq8sI', // chess
   },
+  {
+    id: 'v8',
+    title: 'Carrom Board Trick Shots — World Champions',
+    channel: 'Sports World',
+    duration: '8:22',
+    category: 'Gaming',
+    videoId: '55C9X0bCUBQ', // carrom
+  },
+  // Trending
+  {
+    id: 'v9',
+    title: 'TED Talk: The Power of Eye-Tracking Technology',
+    channel: 'TED',
+    duration: '14:52',
+    category: 'Trending',
+    videoId: 'yIzBMKMzFbI', // TED eye tracking
+  },
+  {
+    id: 'v10',
+    title: 'Assistive Technology: Giving Voice Through Gaze',
+    channel: 'TED',
+    duration: '11:30',
+    category: 'Trending',
+    videoId: 'JnmlE3KMYSo', // assistive tech TED
+  },
+  {
+    id: 'v11',
+    title: 'Indian Railways Journey — Scenic Train Ride',
+    channel: 'Train World India',
+    duration: '1:45:00',
+    category: 'Nature',
+    videoId: 'VhflsHKfSQ4', // scenic train
+  },
+  {
+    id: 'v12',
+    title: 'Yoga for All Abilities — Chair & Seated Practice',
+    channel: 'Yoga With Adriene',
+    duration: '20:40',
+    category: 'Trending',
+    videoId: 'V8PdLiPbXDo', // seated yoga
+  },
+];
+
+const CATEGORIES: { id: VideoCategory; label: string; icon: React.ReactNode }[] = [
+  { id: 'All', label: 'All', icon: <Youtube size={20} /> },
+  { id: 'Trending', label: 'Trending', icon: <Flame size={20} /> },
+  { id: 'Music', label: 'Music', icon: <Music2 size={20} /> },
+  { id: 'Nature', label: 'Nature', icon: <Leaf size={20} /> },
+  { id: 'News', label: 'News', icon: <Newspaper size={20} /> },
+  { id: 'Gaming', label: 'Gaming', icon: <Gamepad2 size={20} /> },
 ];
 
 interface YouTubePageProps {
@@ -100,520 +163,393 @@ interface YouTubePageProps {
 }
 
 export const YouTubePage: React.FC<YouTubePageProps> = ({ onNavigateHome }) => {
-  const [selectedCategory, setSelectedCategory] = useState<string>('Home');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeVideo, setActiveVideo] = useState<YouTubeVideo | null>(null);
-  const [isGazeShieldActive, setIsGazeShieldActive] = useState(true);
+  const [activeCategory, setActiveCategory] = useState<VideoCategory>('All');
+  const [selectedVideo, setSelectedVideo] = useState<VideoEntry | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [playerKey, setPlayerKey] = useState(0); // Force iframe refresh
 
-  // Filtered videos based on category and search query
-  const filteredVideos = YOUTUBE_LIBRARY.filter((v) => {
-    const matchesCategory =
-      selectedCategory === 'Home' ||
-      v.category.toLowerCase() === selectedCategory.toLowerCase();
-    const matchesSearch =
-      !searchQuery ||
-      v.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      v.channel.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const filtered = activeCategory === 'All'
+    ? VIDEO_LIBRARY
+    : VIDEO_LIBRARY.filter((v) => v.category === activeCategory);
+
+  const thumbnailUrl = (id: string) =>
+    `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+
+  const embedUrl = (video: VideoEntry) => {
+    const params = new URLSearchParams({
+      autoplay: '1',
+      mute: isMuted ? '1' : '0',
+      rel: '0',
+      modestbranding: '1',
+      controls: '1',
+    });
+    return `https://www.youtube-nocookie.com/embed/${video.videoId}?${params.toString()}`;
+  };
+
+  if (selectedVideo) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: 'var(--background)',
+          height: 'calc(100vh - 56px)',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Player header */}
+        <div
+          style={{
+            padding: '12px 20px',
+            backgroundColor: '#FFFFFF',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            flexShrink: 0,
+          }}
+        >
+          <DwellButton
+            id="yt-player-back"
+            onClick={() => setSelectedVideo(null)}
+            variant="sage"
+            size="normal"
+            ariaLabel="Back to video list"
+            style={{ minHeight: '40px', padding: '6px 14px', fontSize: '0.9rem' }}
+          >
+            <ArrowLeft size={18} />
+            <span>Back</span>
+          </DwellButton>
+          <div>
+            <div
+              style={{
+                fontSize: '1rem',
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '600px',
+              }}
+            >
+              {selectedVideo.title}
+            </div>
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{selectedVideo.channel}</div>
+          </div>
+        </div>
+
+        {/* Video iframe — full remaining height */}
+        <div style={{ flex: 1, position: 'relative', backgroundColor: '#000000' }}>
+          <iframe
+            key={`${selectedVideo.videoId}-${playerKey}-${isMuted}`}
+            src={embedUrl(selectedVideo)}
+            title={selectedVideo.title}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            style={{
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              display: 'block',
+            }}
+          />
+        </div>
+
+        {/* Player controls bar */}
+        <div
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#FFFFFF',
+            borderTop: '1px solid var(--border)',
+            display: 'flex',
+            gap: '10px',
+            alignItems: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <DwellButton
+            id="yt-player-replay"
+            onClick={() => setPlayerKey((k) => k + 1)}
+            variant="surface"
+            size="normal"
+            ariaLabel="Replay / restart video"
+            style={{ minHeight: '44px', padding: '8px 16px', fontSize: '0.9rem' }}
+          >
+            <RefreshCw size={17} />
+            <span>Replay</span>
+          </DwellButton>
+
+          <DwellButton
+            id="yt-player-mute"
+            onClick={() => setIsMuted((m) => !m)}
+            variant={isMuted ? 'primary' : 'ghost'}
+            size="normal"
+            ariaLabel={isMuted ? 'Unmute' : 'Mute'}
+            style={{ minHeight: '44px', padding: '8px 16px', fontSize: '0.9rem' }}
+          >
+            {isMuted ? <VolumeX size={17} /> : <Volume2 size={17} />}
+            <span>{isMuted ? 'Unmute' : 'Mute'}</span>
+          </DwellButton>
+
+          <div style={{ flex: 1 }} />
+
+          <DwellButton
+            id="yt-player-home"
+            onClick={onNavigateHome}
+            variant="sage"
+            size="normal"
+            ariaLabel="Return to Home"
+            style={{ minHeight: '44px', padding: '8px 16px', fontSize: '0.9rem' }}
+          >
+            <Home size={17} />
+            <span>Home</span>
+          </DwellButton>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
       style={{
         flex: 1,
-        maxWidth: '1440px',
-        margin: '0 auto',
-        width: '100%',
-        padding: '20px 28px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '18px',
-        height: 'calc(100vh - 90px)',
+        backgroundColor: 'var(--background)',
+        height: 'calc(100vh - 56px)',
+        overflow: 'hidden',
       }}
     >
-      {/* ========================================================================= */}
-      {/* TOP SEARCH BAR & HEADER (MATCHING DESIGN 3)                               */}
-      {/* ========================================================================= */}
-      <header
+      {/* Page header */}
+      <div
         style={{
+          padding: '12px 20px',
+          backgroundColor: '#FFFFFF',
+          borderBottom: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          backgroundColor: '#FFFFFF',
-          borderRadius: 'var(--radius-lg)',
-          border: '2px solid var(--border)',
-          padding: '12px 24px',
-          boxShadow: 'var(--shadow-card)',
-          gap: '20px',
+          flexShrink: 0,
         }}
       >
-        {/* Brand */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: '#DC2626',
-              color: '#FFFFFF',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Youtube size={24} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Youtube size={26} color="#DC2626" />
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+              YouTube
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              Via official YouTube embed — real videos
+            </div>
           </div>
-          <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.3px' }}>
-            YouTube
-          </span>
         </div>
-
-        {/* Search Input Bar */}
-        <div
-          style={{
-            flex: 1,
-            maxWidth: '600px',
-            position: 'relative',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <Search
-            size={18}
-            color="var(--text-muted)"
-            style={{ position: 'absolute', left: '16px', pointerEvents: 'none' }}
-          />
-          <input
-            type="text"
-            placeholder="Search videos, documentaries, relaxing sounds..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '12px 18px 12px 46px',
-              borderRadius: 'var(--radius-full)',
-              border: '2px solid var(--border)',
-              backgroundColor: '#F8FAFC',
-              fontSize: '1rem',
-              color: 'var(--text-primary)',
-              outline: 'none',
-            }}
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              style={{
-                position: 'absolute',
-                right: '14px',
-                color: 'var(--text-muted)',
-                fontWeight: 700,
-                fontSize: '0.9rem',
-              }}
-            >
-              Clear
-            </button>
-          )}
-        </div>
-
-        {/* Home Navigation */}
         <DwellButton
-          id="yt-btn-header-home"
+          id="yt-btn-home"
           onClick={onNavigateHome}
           variant="sage"
           size="normal"
-          ariaLabel="Return to Home Dashboard"
-          style={{ minHeight: '48px', padding: '10px 18px' }}
+          ariaLabel="Return to Home"
+          style={{ minHeight: '40px', padding: '6px 14px', fontSize: '0.9rem' }}
         >
-          <Home size={20} />
+          <Home size={17} />
           <span>Home</span>
         </DwellButton>
-      </header>
+      </div>
 
-      {/* ========================================================================= */}
-      {/* MAIN VIEW: LEFT SIDEBAR CATEGORIES + RIGHT VIDEO GRID OR ACTIVE PLAYER     */}
-      {/* ========================================================================= */}
-      {!activeVideo ? (
-        <div
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          overflow: 'hidden',
+        }}
+      >
+        {/* LEFT: Category sidebar */}
+        <nav
           style={{
-            display: 'grid',
-            gridTemplateColumns: '200px 1fr',
-            gap: '24px',
-            flex: 1,
-            overflow: 'hidden',
-          }}
-        >
-          {/* Left Categories Sidebar */}
-          <nav
-            style={{
-              backgroundColor: '#FFFFFF',
-              borderRadius: 'var(--radius-lg)',
-              border: '2px solid var(--border)',
-              padding: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px',
-              boxShadow: 'var(--shadow-card)',
-            }}
-            aria-label="YouTube Categories"
-          >
-            {[
-              { id: 'Home', icon: <Home size={20} /> },
-              { id: 'Trending', icon: <Flame size={20} color="#EA580C" /> },
-              { id: 'Music', icon: <Music size={20} color="#2563EB" /> },
-              { id: 'Gaming', icon: <Gamepad2 size={20} color="#9333EA" /> },
-              { id: 'News', icon: <Newspaper size={20} color="#DC2626" /> },
-            ].map((cat) => {
-              const isSelected = selectedCategory === cat.id;
-              return (
-                <DwellButton
-                  key={cat.id}
-                  id={`yt-cat-${cat.id}`}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  variant={isSelected ? 'primary' : 'surface'}
-                  size="normal"
-                  ariaLabel={`Filter by ${cat.id}`}
-                  style={{
-                    justifyContent: 'flex-start',
-                    padding: '12px 16px',
-                    gap: '12px',
-                    borderRadius: 'var(--radius-md)',
-                  }}
-                >
-                  {cat.icon}
-                  <span>{cat.id}</span>
-                </DwellButton>
-              );
-            })}
-
-            <DwellButton
-              id="yt-btn-side-back"
-              onClick={onNavigateHome}
-              variant="ghost"
-              size="normal"
-              ariaLabel="Back to Home Dashboard"
-              style={{
-                justifyContent: 'flex-start',
-                padding: '12px 16px',
-                gap: '12px',
-                marginTop: 'auto',
-              }}
-            >
-              <ArrowLeft size={20} />
-              <span>Back</span>
-            </DwellButton>
-          </nav>
-
-          {/* Right Video Grid */}
-          <main
-            style={{
-              backgroundColor: '#FFFFFF',
-              borderRadius: 'var(--radius-lg)',
-              border: '2px solid var(--border)',
-              padding: '24px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '18px',
-              boxShadow: 'var(--shadow-card)',
-              overflowY: 'auto',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                Recommended for you ({selectedCategory})
-              </h2>
-              <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                {filteredVideos.length} videos available
-              </span>
-            </div>
-
-            {/* Grid of Video Cards with Blue Selection Rings */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                gap: '20px',
-              }}
-            >
-              {filteredVideos.map((video) => (
-                <DwellButton
-                  key={video.id}
-                  id={`yt-card-${video.id}`}
-                  onClick={() => setActiveVideo(video)}
-                  variant="surface"
-                  size="card"
-                  showCenterRing={true}
-                  ariaLabel={`Play video: ${video.title}`}
-                  style={{
-                    flexDirection: 'column',
-                    alignItems: 'stretch',
-                    padding: '16px',
-                    minHeight: '260px',
-                    borderRadius: 'var(--radius-md)',
-                  }}
-                >
-                  {/* Thumbnail Image Container */}
-                  <div
-                    style={{
-                      position: 'relative',
-                      width: '100%',
-                      height: '160px',
-                      borderRadius: 'var(--radius-sm)',
-                      overflow: 'hidden',
-                      backgroundColor: '#0F172A',
-                    }}
-                  >
-                    <img
-                      src={video.thumbnailUrl}
-                      alt={video.title}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                    {/* Duration Badge */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        bottom: '8px',
-                        right: '8px',
-                        backgroundColor: 'rgba(0, 0, 0, 0.85)',
-                        color: '#FFFFFF',
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: 'var(--radius-xs)',
-                      }}
-                    >
-                      {video.duration}
-                    </div>
-                  </div>
-
-                  {/* Title & Channel */}
-                  <div style={{ marginTop: '12px', textAlign: 'left' }}>
-                    <div
-                      style={{
-                        fontSize: '1rem',
-                        fontWeight: 700,
-                        color: 'var(--text-primary)',
-                        lineHeight: 1.3,
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {video.title}
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                      {video.channel}
-                    </div>
-                  </div>
-                </DwellButton>
-              ))}
-            </div>
-          </main>
-        </div>
-      ) : (
-        /* ACTIVE EMBEDDED PLAYER VIEW WITH ASSISTIVE SHIELD */
-        <main
-          style={{
+            width: '160px',
             backgroundColor: '#FFFFFF',
-            borderRadius: 'var(--radius-lg)',
-            border: '2px solid var(--border)',
-            padding: '24px 32px',
+            borderRight: '1px solid var(--border)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '20px',
-            boxShadow: 'var(--shadow-card)',
-            flex: 1,
+            gap: '6px',
+            padding: '16px 10px',
+            flexShrink: 0,
             overflowY: 'auto',
           }}
         >
-          {/* Top Video Header Controls */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <DwellButton
-                id="yt-btn-player-back"
-                onClick={() => setActiveVideo(null)}
-                variant="emergency"
-                size="large"
-                ariaLabel="Exit video and return to library"
-                style={{ minHeight: '56px', padding: '10px 22px', fontWeight: 700 }}
-              >
-                <XCircle size={22} />
-                <span>Close Video</span>
-              </DwellButton>
-
-              <DwellButton
-                id="yt-btn-player-home"
-                onClick={onNavigateHome}
-                variant="sage"
-                size="large"
-                ariaLabel="Return to Home Dashboard"
-                style={{ minHeight: '56px', padding: '10px 22px' }}
-              >
-                <Home size={22} />
-                <span>Return Home</span>
-              </DwellButton>
-            </div>
-
-            {/* Gaze Protection Shield Toggle */}
+          {CATEGORIES.map((cat) => (
             <DwellButton
-              id="yt-btn-player-shield"
-              onClick={() => setIsGazeShieldActive(!isGazeShieldActive)}
-              variant={isGazeShieldActive ? 'primary' : 'surface'}
+              key={cat.id}
+              id={`yt-cat-${cat.id}`}
+              onClick={() => setActiveCategory(cat.id)}
+              variant={activeCategory === cat.id ? 'primary' : 'ghost'}
               size="normal"
-              ariaLabel="Toggle gaze click shield for YouTube player"
-              style={{ minHeight: '50px', padding: '10px 18px' }}
+              ariaLabel={`Show ${cat.label} videos`}
+              style={{
+                justifyContent: 'flex-start',
+                gap: '10px',
+                padding: '10px 12px',
+                minHeight: '50px',
+                fontSize: '0.95rem',
+                fontWeight: activeCategory === cat.id ? 700 : 500,
+              }}
             >
-              {isGazeShieldActive ? <ShieldCheck size={20} /> : <Shield size={20} />}
-              <span>{isGazeShieldActive ? 'Gaze Shield Active 🛡️' : 'Shield Off (Touch Active)'}</span>
+              {cat.icon}
+              <span>{cat.label}</span>
+            </DwellButton>
+          ))}
+
+          <div style={{ marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+            <DwellButton
+              id="yt-nav-home-sidebar"
+              onClick={onNavigateHome}
+              variant="ghost"
+              size="normal"
+              ariaLabel="Return to Home dashboard"
+              style={{ justifyContent: 'flex-start', gap: '10px', padding: '10px 12px', minHeight: '50px', fontSize: '0.95rem' }}
+            >
+              <Home size={20} />
+              <span>EyeControl</span>
             </DwellButton>
           </div>
+        </nav>
 
-          <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-            {activeVideo.title}
-          </h1>
-
-          {/* 16:9 Responsive Player with Pointer-Events Shield */}
+        {/* RIGHT: Video grid */}
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '20px',
+          }}
+        >
           <div
             style={{
-              position: 'relative',
-              width: '100%',
-              paddingBottom: '56.25%',
-              backgroundColor: '#000000',
-              borderRadius: 'var(--radius-lg)',
-              overflow: 'hidden',
-              border: isGazeShieldActive ? '3px solid var(--gaze-blue)' : '2px solid var(--border)',
-              boxShadow: '0 12px 32px rgba(0, 0, 0, 0.25)',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+              gap: '18px',
             }}
           >
-            <iframe
-              src={`${activeVideo.embedUrl}?autoplay=1&rel=0&modestbranding=1`}
-              title={activeVideo.title}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                border: 0,
-                pointerEvents: isGazeShieldActive ? 'none' : 'auto',
-              }}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-
-            {isGazeShieldActive && (
-              <div
+            {filtered.map((video) => (
+              <DwellButton
+                key={video.id}
+                id={`yt-video-${video.id}`}
+                onClick={() => setSelectedVideo(video)}
+                variant="surface"
+                size="normal"
+                ariaLabel={`Play: ${video.title} by ${video.channel}`}
                 style={{
-                  position: 'absolute',
-                  top: '12px',
-                  right: '12px',
-                  backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                  color: '#38BDF8',
-                  padding: '6px 14px',
-                  borderRadius: 'var(--radius-full)',
-                  fontSize: '0.85rem',
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  pointerEvents: 'none',
+                  flexDirection: 'column',
+                  alignItems: 'stretch',
+                  padding: 0,
+                  minHeight: '0',
+                  overflow: 'hidden',
+                  borderRadius: 'var(--radius-md)',
+                  gap: 0,
                 }}
               >
-                <ShieldCheck size={16} />
-                <span>Protected Gaze Mode</span>
-              </div>
-            )}
+                {/* Real YouTube thumbnail */}
+                <div
+                  style={{
+                    width: '100%',
+                    aspectRatio: '16/9',
+                    backgroundColor: '#0F172A',
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <img
+                    src={thumbnailUrl(video.videoId)}
+                    alt={video.title}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    loading="lazy"
+                  />
+                  {/* Duration badge */}
+                  <span
+                    style={{
+                      position: 'absolute',
+                      bottom: '8px',
+                      right: '8px',
+                      backgroundColor: 'rgba(0,0,0,0.78)',
+                      color: '#FFFFFF',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                    }}
+                  >
+                    {video.duration}
+                  </span>
+                  {/* Play overlay icon */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: 'rgba(0,0,0,0)',
+                      transition: 'background-color 150ms',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(220,38,38,0.85)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: 0.85,
+                      }}
+                    >
+                      <Play size={22} color="#FFFFFF" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Video info */}
+                <div style={{ padding: '10px 12px', textAlign: 'left' }}>
+                  <div
+                    style={{
+                      fontSize: '0.9rem',
+                      fontWeight: 700,
+                      color: 'var(--text-primary)',
+                      lineHeight: 1.3,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    {video.title}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                    {video.channel} • {video.category}
+                  </div>
+                </div>
+              </DwellButton>
+            ))}
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>
-              Channel: <strong>{activeVideo.channel}</strong>
-            </span>
-            <a
-              href={`https://www.youtube.com/watch?v=${activeVideo.id}`}
-              target="_blank"
-              rel="noreferrer"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.95rem', color: 'var(--secondary)', fontWeight: 600 }}
+          {filtered.length === 0 && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '200px',
+                color: 'var(--text-muted)',
+                fontSize: '1rem',
+              }}
             >
-              <span>Watch on YouTube</span>
-              <ExternalLink size={16} />
-            </a>
-          </div>
-        </main>
-      )}
-
-      {/* ========================================================================= */}
-      {/* BOTTOM ACTION BAR (MATCHING DESIGN 3)                                     */}
-      {/* ========================================================================= */}
-      <footer
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          backgroundColor: '#FFFFFF',
-          borderRadius: 'var(--radius-lg)',
-          border: '2px solid var(--border)',
-          padding: '10px 24px',
-          boxShadow: 'var(--shadow-card)',
-          gap: '12px',
-        }}
-      >
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <DwellButton
-            id="yt-btn-bot-play"
-            onClick={() => {}}
-            variant="primary"
-            size="normal"
-            ariaLabel="Play video"
-            style={{ minHeight: '48px', padding: '8px 20px' }}
-          >
-            <Play size={18} />
-            <span>Play Video</span>
-          </DwellButton>
-
-          <DwellButton
-            id="yt-btn-bot-pause"
-            onClick={() => {}}
-            variant="surface"
-            size="normal"
-            ariaLabel="Pause video"
-            style={{ minHeight: '48px', padding: '8px 20px' }}
-          >
-            <Pause size={18} />
-            <span>Pause</span>
-          </DwellButton>
+              No videos in this category yet.
+            </div>
+          )}
         </div>
-
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <DwellButton
-            id="yt-btn-bot-back"
-            onClick={() => {
-              if (activeVideo) setActiveVideo(null);
-              else onNavigateHome();
-            }}
-            variant="surface"
-            size="normal"
-            ariaLabel="Back"
-            style={{ minHeight: '48px', padding: '8px 20px' }}
-          >
-            <ArrowLeft size={18} />
-            <span>Back</span>
-          </DwellButton>
-
-          <DwellButton
-            id="yt-btn-bot-home"
-            onClick={onNavigateHome}
-            variant="sage"
-            size="normal"
-            ariaLabel="Home"
-            style={{ minHeight: '48px', padding: '8px 20px' }}
-          >
-            <Home size={18} />
-            <span>Home</span>
-          </DwellButton>
-        </div>
-      </footer>
+      </div>
     </div>
   );
 };

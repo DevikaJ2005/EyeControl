@@ -1,31 +1,35 @@
 /**
- * HomePage (/home)
- * Design 1: Modern Dashboard (Recommended)
- * Exactly matching the reference assistive layout:
- * - Left "Quick Access" sidebar (Home, Speak, YouTube, News, Settings)
- * - Center Grid of 6 large high-contrast cards (News, YouTube, Speak, Settings, Communication, Learning)
- * - Right live "India Today • Latest News" preview with image, headline, and Read Aloud / Stop Scroll controls
- * - Bottom instruction pill: "Gaze at any option to select it. A blue ring will show your selection."
- * - Rest mode shortcut
+ * HomePage — EyeControl Main Dashboard
+ *
+ * Layout: Full-screen utilisation
+ *   LEFT column (280px): Large navigation tiles — primary controls
+ *   RIGHT section: 2×3 grid of secondary cards + news preview below
+ *
+ * Design principles:
+ *   - Soft off-white background, deep navy text
+ *   - Large, labelled tiles with enough hit area for gaze
+ *   - No fake news content — real headline from RSS (or offline fallback)
+ *   - SOS removed from header; accessible via Help page
+ *   - Rest mode is a clear tile, not buried
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { DwellButton } from '../components/DwellButton';
 import { SpeechEngine } from '../speech/SpeechEngine';
+import { IndiaTodayNewsService, IndiaTodayArticle } from '../services/IndiaTodayNewsService';
 import {
   Newspaper,
   Youtube,
   Volume2,
   Settings,
-  Heart,
-  GraduationCap,
-  Play,
-  Square,
-  Home,
-  ArrowRight,
-  CheckCircle2,
+  HelpCircle,
+  Target,
   Moon,
   Maximize2,
+  Play,
+  Square,
+  ArrowRight,
+  Wifi,
 } from 'lucide-react';
 
 interface HomePageProps {
@@ -34,44 +38,49 @@ interface HomePageProps {
   onToggleRest?: () => void;
 }
 
-export const HomePage: React.FC<HomePageProps> = ({
-  onNavigate,
-  onOpenSettings,
-  onToggleRest,
-}) => {
-  const [isReadingSummary, setIsReadingSummary] = useState(false);
+type NavTile = {
+  id: string;
+  label: string;
+  sub: string;
+  icon: React.ReactNode;
+  page: 'news' | 'youtube' | 'speak' | 'help' | 'settings' | 'calibration' | 'rest' | 'fullscreen';
+  iconBg: string;
+  iconColor: string;
+  primary?: boolean;
+};
+
+export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onOpenSettings, onToggleRest }) => {
+  const [topHeadline, setTopHeadline] = useState<IndiaTodayArticle | null>(null);
+  const [isReadingHeadline, setIsReadingHeadline] = useState(false);
+  const [headlineFetched, setHeadlineFetched] = useState(false);
+
   const speechEngine = SpeechEngine.getInstance();
 
-  const previewHeadline = {
-    title: "India's growth story on track, says PM Modi",
-    summary:
-      "India is on a steady growth path despite global uncertainties, says the Prime Minister, highlighting domestic innovation, green energy transitions, and digital infrastructure.",
-    source: "India Today • Latest News",
-    imageUrl: "https://images.unsplash.com/photo-1532375810709-75b1da00537c?auto=format&fit=crop&w=600&q=80",
-  };
+  useEffect(() => {
+    IndiaTodayNewsService.getInstance()
+      .getLatestHeadlines()
+      .then((articles) => {
+        if (articles.length > 0) setTopHeadline(articles[0]);
+        setHeadlineFetched(true);
+      })
+      .catch(() => setHeadlineFetched(true));
+  }, []);
 
-  const handleReadSummary = () => {
-    if (isReadingSummary) {
+  const handleReadHeadline = () => {
+    if (isReadingHeadline) {
       speechEngine.stop();
-      setIsReadingSummary(false);
+      setIsReadingHeadline(false);
       return;
     }
-
-    setIsReadingSummary(true);
+    if (!topHeadline) return;
+    setIsReadingHeadline(true);
     speechEngine.speak(
-      `${previewHeadline.source}. ${previewHeadline.title}. ${previewHeadline.summary}`,
-      () => {
-        setIsReadingSummary(false);
-      }
+      `India Today. ${topHeadline.title}. ${topHeadline.paragraphs[0] ?? ''}`,
+      () => setIsReadingHeadline(false)
     );
   };
 
-  const handleStopSummary = () => {
-    speechEngine.stop();
-    setIsReadingSummary(false);
-  };
-
-  const handleToggleFullscreen = () => {
+  const handleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
     } else {
@@ -79,518 +88,415 @@ export const HomePage: React.FC<HomePageProps> = ({
     }
   };
 
+  const NAV_TILES: NavTile[] = [
+    {
+      id: 'tile-news',
+      label: 'News',
+      sub: 'India Today • Live',
+      icon: <Newspaper size={30} />,
+      page: 'news',
+      iconBg: '#EFF6FF',
+      iconColor: '#1D4ED8',
+      primary: true,
+    },
+    {
+      id: 'tile-youtube',
+      label: 'YouTube',
+      sub: 'Watch videos',
+      icon: <Youtube size={30} />,
+      page: 'youtube',
+      iconBg: '#FEF2F2',
+      iconColor: '#DC2626',
+    },
+    {
+      id: 'tile-speak',
+      label: 'Speak',
+      sub: 'Communication board',
+      icon: <Volume2 size={30} />,
+      page: 'speak',
+      iconBg: '#F0FDF4',
+      iconColor: '#16A34A',
+    },
+    {
+      id: 'tile-help',
+      label: 'Help',
+      sub: 'Guide & emergency',
+      icon: <HelpCircle size={30} />,
+      page: 'help',
+      iconBg: '#FFFBEB',
+      iconColor: '#B45309',
+    },
+    {
+      id: 'tile-settings',
+      label: 'Settings',
+      sub: 'Adjust dwell & speed',
+      icon: <Settings size={30} />,
+      page: 'settings',
+      iconBg: '#F8FAFC',
+      iconColor: '#475569',
+    },
+    {
+      id: 'tile-calibrate',
+      label: 'Calibrate',
+      sub: 'Improve accuracy',
+      icon: <Target size={30} />,
+      page: 'calibration',
+      iconBg: '#EFF6FF',
+      iconColor: '#2C5E8A',
+    },
+  ];
+
   return (
     <main
       style={{
         flex: 1,
-        maxWidth: '1440px',
-        margin: '0 auto',
-        width: '100%',
-        padding: '24px 28px',
         display: 'flex',
         flexDirection: 'column',
+        padding: '20px 24px',
         gap: '20px',
+        height: 'calc(100vh - 56px)',
+        overflow: 'hidden',
+        backgroundColor: 'var(--background)',
       }}
     >
-      {/* 3-Column Main Dashboard Layout matching Design 1 */}
+      {/* ============================================================
+          TOP SECTION: LEFT nav tiles + RIGHT news preview
+          ============================================================ */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '220px 1fr 380px',
-          gap: '24px',
-          alignItems: 'stretch',
-          minHeight: '520px',
+          gridTemplateColumns: '300px 1fr',
+          gap: '20px',
+          flex: 1,
+          minHeight: 0,
         }}
       >
-        {/* ========================================================================= */}
-        {/* COLUMN 1: LEFT SIDEBAR "QUICK ACCESS"                                    */}
-        {/* ========================================================================= */}
-        <nav
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: 'var(--radius-lg)',
-            border: '2px solid var(--border)',
-            padding: '20px 16px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-            boxShadow: 'var(--shadow-card)',
-          }}
-          aria-label="Quick Access Navigation"
-        >
-          <div
-            style={{
-              fontSize: '0.85rem',
-              fontWeight: 800,
-              color: 'var(--text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-              paddingLeft: '8px',
-              marginBottom: '4px',
-            }}
-          >
-            Quick Access
-          </div>
-
-          <DwellButton
-            id="nav-quick-home"
-            onClick={() => onNavigate('home')}
-            variant="primary"
-            size="normal"
-            ariaLabel="Home Dashboard"
-            style={{ justifyContent: 'flex-start', padding: '12px 18px', gap: '14px' }}
-          >
-            <Home size={22} />
-            <span style={{ fontWeight: 700 }}>Home</span>
-          </DwellButton>
-
-          <DwellButton
-            id="nav-quick-speak"
-            onClick={() => onNavigate('speak')}
-            variant="surface"
-            size="normal"
-            ariaLabel="Speak Voice Assistant"
-            style={{ justifyContent: 'flex-start', padding: '12px 18px', gap: '14px' }}
-          >
-            <Volume2 size={22} color="var(--secondary)" />
-            <span>Speak</span>
-          </DwellButton>
-
-          <DwellButton
-            id="nav-quick-youtube"
-            onClick={() => onNavigate('youtube')}
-            variant="surface"
-            size="normal"
-            ariaLabel="YouTube Video Player"
-            style={{ justifyContent: 'flex-start', padding: '12px 18px', gap: '14px' }}
-          >
-            <Youtube size={22} color="#DC2626" />
-            <span>YouTube</span>
-          </DwellButton>
-
-          <DwellButton
-            id="nav-quick-news"
-            onClick={() => onNavigate('news')}
-            variant="surface"
-            size="normal"
-            ariaLabel="India Today News Reader"
-            style={{ justifyContent: 'flex-start', padding: '12px 18px', gap: '14px' }}
-          >
-            <Newspaper size={22} color="#2563EB" />
-            <span>News</span>
-          </DwellButton>
-
-          <DwellButton
-            id="nav-quick-settings"
-            onClick={() => (onOpenSettings ? onOpenSettings() : onNavigate('settings'))}
-            variant="ghost"
-            size="normal"
-            ariaLabel="Accessibility Settings"
-            style={{ justifyContent: 'flex-start', padding: '12px 18px', gap: '14px', marginTop: 'auto' }}
-          >
-            <Settings size={22} color="var(--text-secondary)" />
-            <span>Settings</span>
-          </DwellButton>
-        </nav>
-
-        {/* ========================================================================= */}
-        {/* COLUMN 2: CENTER GRID OF 6 LARGE CARDS                                    */}
-        {/* ========================================================================= */}
+        {/* ===========================
+            LEFT: Navigation Tiles
+            =========================== */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gridTemplateRows: 'repeat(2, 1fr)',
-            gap: '18px',
+            gridTemplateRows: 'repeat(6, 1fr)',
+            gap: '12px',
           }}
         >
-          {/* Card 1: News (Design 1 Hero item with Blue Ring) */}
-          <DwellButton
-            id="home-card-news"
-            onClick={() => onNavigate('news')}
-            variant="surface"
-            size="card"
-            showCenterRing={true}
-            ariaLabel="News: Read today's news from India Today"
-            style={{
-              flexDirection: 'column',
-              justifyContent: 'center',
-              alignItems: 'center',
-              padding: '24px 16px',
-              textAlign: 'center',
-            }}
-          >
-            <div
-              style={{
-                width: '68px',
-                height: '68px',
-                borderRadius: 'var(--radius-lg)',
-                backgroundColor: '#EFF6FF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#2563EB',
-                marginBottom: '14px',
-              }}
-            >
-              <Newspaper size={36} />
-            </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              News
-            </div>
-            <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Read today's news
-            </div>
-          </DwellButton>
-
-          {/* Card 2: YouTube */}
-          <DwellButton
-            id="home-card-youtube"
-            onClick={() => onNavigate('youtube')}
-            variant="surface"
-            size="card"
-            showCenterRing={true}
-            ariaLabel="YouTube: Watch videos"
-            style={{
-              flexDirection: 'column',
-              justifyContent: 'center',
-              alignItems: 'center',
-              padding: '24px 16px',
-              textAlign: 'center',
-            }}
-          >
-            <div
-              style={{
-                width: '68px',
-                height: '68px',
-                borderRadius: 'var(--radius-lg)',
-                backgroundColor: '#FEF2F2',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#DC2626',
-                marginBottom: '14px',
-              }}
-            >
-              <Youtube size={36} />
-            </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              YouTube
-            </div>
-            <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Watch videos
-            </div>
-          </DwellButton>
-
-          {/* Card 3: Speak */}
-          <DwellButton
-            id="home-card-speak"
-            onClick={() => onNavigate('speak')}
-            variant="surface"
-            size="card"
-            showCenterRing={true}
-            ariaLabel="Speak: Voice assistant & communication board"
-            style={{
-              flexDirection: 'column',
-              justifyContent: 'center',
-              alignItems: 'center',
-              padding: '24px 16px',
-              textAlign: 'center',
-            }}
-          >
-            <div
-              style={{
-                width: '68px',
-                height: '68px',
-                borderRadius: 'var(--radius-lg)',
-                backgroundColor: '#F0FDF4',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#16A34A',
-                marginBottom: '14px',
-              }}
-            >
-              <Volume2 size={36} />
-            </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              Speak
-            </div>
-            <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Voice assistant
-            </div>
-          </DwellButton>
-
-          {/* Card 4: Settings */}
-          <DwellButton
-            id="home-card-settings"
-            onClick={() => (onOpenSettings ? onOpenSettings() : onNavigate('settings'))}
-            variant="surface"
-            size="card"
-            showCenterRing={true}
-            ariaLabel="Settings: Customize gaze sensitivity and preferences"
-            style={{
-              flexDirection: 'column',
-              justifyContent: 'center',
-              alignItems: 'center',
-              padding: '24px 16px',
-              textAlign: 'center',
-            }}
-          >
-            <div
-              style={{
-                width: '68px',
-                height: '68px',
-                borderRadius: 'var(--radius-lg)',
-                backgroundColor: '#F1F5F9',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#475569',
-                marginBottom: '14px',
-              }}
-            >
-              <Settings size={36} />
-            </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              Settings
-            </div>
-            <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Customize
-            </div>
-          </DwellButton>
-
-          {/* Card 5: Communication */}
-          <DwellButton
-            id="home-card-communication"
-            onClick={() => onNavigate('speak')}
-            variant="surface"
-            size="card"
-            showCenterRing={true}
-            ariaLabel="Communication: Let's talk"
-            style={{
-              flexDirection: 'column',
-              justifyContent: 'center',
-              alignItems: 'center',
-              padding: '24px 16px',
-              textAlign: 'center',
-            }}
-          >
-            <div
-              style={{
-                width: '68px',
-                height: '68px',
-                borderRadius: 'var(--radius-lg)',
-                backgroundColor: '#FDF2F8',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#DB2777',
-                marginBottom: '14px',
-              }}
-            >
-              <Heart size={36} />
-            </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              Communication
-            </div>
-            <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Let's talk
-            </div>
-          </DwellButton>
-
-          {/* Card 6: Learning & Help */}
-          <DwellButton
-            id="home-card-learning"
-            onClick={() => onNavigate('help')}
-            variant="surface"
-            size="card"
-            showCenterRing={true}
-            ariaLabel="Learning: Explore & Learn"
-            style={{
-              flexDirection: 'column',
-              justifyContent: 'center',
-              alignItems: 'center',
-              padding: '24px 16px',
-              textAlign: 'center',
-            }}
-          >
-            <div
-              style={{
-                width: '68px',
-                height: '68px',
-                borderRadius: 'var(--radius-lg)',
-                backgroundColor: '#FAF5FF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#9333EA',
-                marginBottom: '14px',
-              }}
-            >
-              <GraduationCap size={36} />
-            </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              Learning
-            </div>
-            <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Explore & Learn
-            </div>
-          </DwellButton>
+          {NAV_TILES.map((tile) => {
+            const isSettings = tile.page === 'settings';
+            const isCalibrate = tile.page === 'calibration';
+            return (
+              <DwellButton
+                key={tile.id}
+                id={tile.id}
+                onClick={() => {
+                  if (isSettings && onOpenSettings) {
+                    onOpenSettings();
+                  } else if (tile.page === 'rest') {
+                    onToggleRest?.();
+                  } else if (tile.page === 'fullscreen') {
+                    handleFullscreen();
+                  } else {
+                    onNavigate(tile.page as Parameters<typeof onNavigate>[0]);
+                  }
+                }}
+                variant={tile.primary ? 'primary' : 'surface'}
+                size="normal"
+                ariaLabel={`${tile.label}: ${tile.sub}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '14px',
+                  padding: '0 18px',
+                  minHeight: '0',
+                  height: '100%',
+                  textAlign: 'left',
+                  borderRadius: 'var(--radius-md)',
+                  justifyContent: 'flex-start',
+                }}
+              >
+                <div
+                  style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '10px',
+                    backgroundColor: tile.primary ? 'rgba(255,255,255,0.15)' : tile.iconBg,
+                    color: tile.primary ? '#FFFFFF' : tile.iconColor,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  {tile.icon}
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: '1.1rem',
+                      fontWeight: 800,
+                      color: tile.primary ? '#FFFFFF' : 'var(--text-primary)',
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {tile.label}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '0.8rem',
+                      color: tile.primary ? 'rgba(255,255,255,0.75)' : 'var(--text-muted)',
+                      marginTop: '2px',
+                    }}
+                  >
+                    {tile.sub}
+                  </div>
+                </div>
+              </DwellButton>
+            );
+          })}
         </div>
 
-        {/* ========================================================================= */}
-        {/* COLUMN 3: RIGHT "INDIA TODAY • LATEST NEWS" PREVIEW CARD                 */}
-        {/* ========================================================================= */}
-        <section
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: 'var(--radius-lg)',
-            border: '2px solid var(--border)',
-            padding: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            boxShadow: 'var(--shadow-card)',
-            gap: '14px',
-          }}
-          aria-label="Today's News Preview"
-        >
-          {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#DC2626', textTransform: 'uppercase' }}>
-              {previewHeadline.source}
-            </span>
-            <DwellButton
-              id="home-btn-view-more-news"
-              onClick={() => onNavigate('news')}
-              variant="ghost"
-              size="normal"
-              ariaLabel="View more India Today headlines"
-              style={{ minHeight: '36px', padding: '6px 10px', fontSize: '0.85rem', color: 'var(--secondary)' }}
-            >
-              <span>View More</span>
-              <ArrowRight size={14} />
-            </DwellButton>
-          </div>
-
-          {/* Hero Thumbnail */}
-          <div
-            style={{
-              width: '100%',
-              height: '160px',
-              borderRadius: 'var(--radius-md)',
-              overflow: 'hidden',
-              backgroundColor: '#0F172A',
-              position: 'relative',
-            }}
-          >
-            <img
-              src={previewHeadline.imageUrl}
-              alt="India Today Headline Thumbnail"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          </div>
-
-          {/* Headline & Body */}
-          <div>
-            <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 6px 0', lineHeight: 1.3 }}>
-              {previewHeadline.title}
-            </h2>
-            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
-              {previewHeadline.summary}
-            </p>
-          </div>
-
-          {/* Audio Reading Controls */}
-          <div style={{ display: 'flex', gap: '10px', marginTop: 'auto' }}>
-            <DwellButton
-              id="home-btn-news-read"
-              onClick={handleReadSummary}
-              variant={isReadingSummary ? 'primary' : 'sage'}
-              size="normal"
-              ariaLabel={isReadingSummary ? 'Stop reading summary' : 'Read headline summary aloud'}
-              style={{ flex: 1, minHeight: '48px', padding: '10px 14px', fontSize: '0.95rem' }}
-            >
-              <Play size={18} />
-              <span>{isReadingSummary ? 'Reading...' : 'Read Aloud'}</span>
-            </DwellButton>
-
-            <DwellButton
-              id="home-btn-news-stop"
-              onClick={handleStopSummary}
-              disabled={!isReadingSummary}
-              variant="ghost"
-              size="normal"
-              ariaLabel="Stop reading news aloud"
-              style={{ minHeight: '48px', padding: '10px 14px', fontSize: '0.95rem' }}
-            >
-              <Square size={16} />
-              <span>Stop</span>
-            </DwellButton>
-          </div>
-        </section>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* BOTTOM BAR: INSTRUCTION PILL + REST MODE + FULLSCREEN                     */}
-      {/* ========================================================================= */}
-      <footer
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '16px',
-        }}
-      >
-        {/* Instruction Pill */}
+        {/* ===========================
+            RIGHT: News preview + 2×3 secondary grid
+            =========================== */}
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            backgroundColor: '#F0FDF4',
-            border: '1.5px solid #BBF7D0',
-            padding: '10px 20px',
-            borderRadius: 'var(--radius-full)',
-            fontSize: '0.95rem',
-            color: '#166534',
-            fontWeight: 600,
-            boxShadow: 'var(--shadow-subtle)',
+            display: 'grid',
+            gridTemplateRows: '1fr auto',
+            gap: '16px',
+            minHeight: 0,
           }}
         >
-          <CheckCircle2 size={18} color="#16A34A" />
-          <span>Gaze at any option to select it. A blue ring will show your selection.</span>
-        </div>
-
-        {/* Bottom Right Controls: Rest Mode + Fullscreen */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {onToggleRest && (
-            <DwellButton
-              id="home-btn-bottom-rest"
-              onClick={onToggleRest}
-              variant="surface"
-              size="normal"
-              ariaLabel="Pause and enter Rest Mode"
-              style={{ minHeight: '44px', padding: '8px 16px', fontSize: '0.9rem' }}
-            >
-              <Moon size={16} />
-              <span>Rest Mode</span>
-            </DwellButton>
-          )}
-
-          <DwellButton
-            id="home-btn-fullscreen"
-            onClick={handleToggleFullscreen}
-            variant="ghost"
-            size="normal"
-            ariaLabel="Toggle Fullscreen"
-            style={{ minHeight: '44px', padding: '8px 12px' }}
+          {/* News preview card — full height top section */}
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--border)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
           >
-            <Maximize2 size={18} />
-          </DwellButton>
+            {/* Card header */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '14px 18px',
+                borderBottom: '1px solid var(--border)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span
+                  style={{
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    color: '#DC2626',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.4px',
+                  }}
+                >
+                  India Today
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.75rem',
+                    color: 'var(--text-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <Wifi size={12} />
+                  {headlineFetched ? 'Latest News' : 'Loading…'}
+                </span>
+              </div>
+              <DwellButton
+                id="home-btn-view-all-news"
+                onClick={() => onNavigate('news')}
+                variant="ghost"
+                size="normal"
+                ariaLabel="Open full news reader"
+                style={{ minHeight: '36px', padding: '5px 10px', fontSize: '0.82rem' }}
+              >
+                <span>All News</span>
+                <ArrowRight size={13} />
+              </DwellButton>
+            </div>
+
+            {/* Headline content */}
+            <div
+              style={{
+                flex: 1,
+                padding: '16px 18px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                overflow: 'hidden',
+              }}
+            >
+              {topHeadline ? (
+                <>
+                  {topHeadline.imageUrl && (
+                    <div
+                      style={{
+                        height: '180px',
+                        borderRadius: 'var(--radius-sm)',
+                        overflow: 'hidden',
+                        backgroundColor: '#0F172A',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src={topHeadline.imageUrl}
+                        alt={topHeadline.title}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
+                  <h2
+                    style={{
+                      fontSize: '1.1rem',
+                      fontWeight: 700,
+                      color: 'var(--text-primary)',
+                      lineHeight: 1.35,
+                      margin: 0,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {topHeadline.title}
+                  </h2>
+                  {topHeadline.paragraphs[0] && (
+                    <p
+                      style={{
+                        fontSize: '0.88rem',
+                        color: 'var(--text-secondary)',
+                        lineHeight: 1.5,
+                        margin: 0,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {topHeadline.paragraphs[0]}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--text-muted)',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  {headlineFetched ? 'No headlines available' : 'Fetching headlines…'}
+                </div>
+              )}
+            </div>
+
+            {/* Audio controls */}
+            <div
+              style={{
+                padding: '12px 18px',
+                borderTop: '1px solid var(--border)',
+                display: 'flex',
+                gap: '10px',
+              }}
+            >
+              <DwellButton
+                id="home-btn-read-headline"
+                onClick={handleReadHeadline}
+                variant={isReadingHeadline ? 'primary' : 'sage'}
+                size="normal"
+                ariaLabel={isReadingHeadline ? 'Stop reading' : 'Read headline aloud'}
+                disabled={!topHeadline}
+                style={{ flex: 1, minHeight: '44px', fontSize: '0.9rem' }}
+              >
+                <Play size={16} />
+                <span>{isReadingHeadline ? 'Reading…' : 'Read Aloud'}</span>
+              </DwellButton>
+              <DwellButton
+                id="home-btn-stop-headline"
+                onClick={() => {
+                  speechEngine.stop();
+                  setIsReadingHeadline(false);
+                }}
+                variant="ghost"
+                size="normal"
+                disabled={!isReadingHeadline}
+                ariaLabel="Stop reading"
+                style={{ minHeight: '44px', padding: '8px 14px', fontSize: '0.9rem' }}
+              >
+                <Square size={14} />
+                <span>Stop</span>
+              </DwellButton>
+            </div>
+          </div>
+
+          {/* Bottom action bar: Rest + Fullscreen */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              justifyContent: 'space-between',
+              padding: '10px 16px',
+              backgroundColor: '#FFFFFF',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            <div
+              style={{
+                fontSize: '0.9rem',
+                color: 'var(--text-secondary)',
+                fontWeight: 500,
+              }}
+            >
+              Look at a tile and hold your gaze for{' '}
+              <span style={{ fontWeight: 700, color: 'var(--secondary)' }}>~1 second</span> to select.
+              A blue ring shows selection progress.
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {onToggleRest && (
+                <DwellButton
+                  id="home-btn-rest"
+                  onClick={onToggleRest}
+                  variant="ghost"
+                  size="normal"
+                  ariaLabel="Enter Rest Mode — pause all tracking"
+                  style={{ minHeight: '40px', padding: '6px 14px', fontSize: '0.88rem', whiteSpace: 'nowrap' }}
+                >
+                  <Moon size={16} />
+                  <span>Rest</span>
+                </DwellButton>
+              )}
+              <DwellButton
+                id="home-btn-fullscreen"
+                onClick={handleFullscreen}
+                variant="ghost"
+                size="normal"
+                ariaLabel="Toggle fullscreen"
+                style={{ minHeight: '40px', padding: '6px 10px' }}
+              >
+                <Maximize2 size={16} />
+              </DwellButton>
+            </div>
+          </div>
         </div>
-      </footer>
+      </div>
     </main>
   );
 };
