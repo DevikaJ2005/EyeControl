@@ -86,16 +86,14 @@ export const EyeCursor: React.FC<EyeCursorProps> = ({
             height: '36px',
             borderRadius: '50%',
             border: isDwelling
-              ? '2px solid rgba(0, 136, 255, 0.9)'
-              : isReliable
-                ? '2px solid rgba(15, 37, 55, 0.45)'
-                : '2px solid rgba(37, 99, 235, 0.55)',
+              ? '2.5px solid #00C8FF'
+              : '2px solid rgba(0, 200, 255, 0.65)',
             backgroundColor: isDwelling
-              ? 'rgba(0, 136, 255, 0.15)'
-              : 'rgba(15, 37, 55, 0.06)',
+              ? 'rgba(0, 200, 255, 0.2)'
+              : 'rgba(0, 200, 255, 0.08)',
             boxShadow: isDwelling
-              ? '0 0 16px rgba(0, 136, 255, 0.55)'
-              : '0 2px 8px rgba(15, 23, 42, 0.15)',
+              ? '0 0 20px rgba(0, 200, 255, 0.85)'
+              : '0 0 8px rgba(0, 200, 255, 0.35)',
             transform: isDwelling ? 'scale(1.2)' : 'scale(1.0)',
             transition: 'all 100ms ease-out',
           }}
@@ -118,13 +116,13 @@ export const EyeCursor: React.FC<EyeCursorProps> = ({
               cy="21"
               r="18"
               fill="none"
-              stroke="#0088FF"
+              stroke="#00C8FF"
               strokeWidth="4"
               strokeDasharray="113.1"
               strokeDashoffset={113.1 * (1 - dwellProgress)}
               strokeLinecap="round"
               style={{
-                filter: 'drop-shadow(0 0 4px rgba(0, 136, 255, 0.6))',
+                filter: 'drop-shadow(0 0 6px rgba(0, 200, 255, 0.85))',
               }}
             />
           </svg>
@@ -136,19 +134,15 @@ export const EyeCursor: React.FC<EyeCursorProps> = ({
             width: isDwelling ? '10px' : '8px',
             height: isDwelling ? '10px' : '8px',
             borderRadius: '50%',
-            backgroundColor: isDwelling
-              ? '#0088FF'
-              : isReliable
-                ? '#0F2537'
-                : '#2563EB',
-            boxShadow: isDwelling ? '0 0 8px #0088FF' : 'none',
+            backgroundColor: '#00C8FF',
+            boxShadow: '0 0 10px #00C8FF',
             transition: 'all 80ms ease-out',
           }}
         />
       </div>
 
-      {/* Warning message if tracking confidence drops */}
-      {!isReliable && confidence.reason && (
+      {/* Warning message if head pose is extreme */}
+      {confidence.isPoseExtreme && confidence.reason && (
         <div
           style={{
             position: 'absolute',

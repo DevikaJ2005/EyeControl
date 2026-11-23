@@ -293,17 +293,27 @@ export const App: React.FC = () => {
         }
       });
       // Auto-start camera with persistent video element for immediate hands-free control
-      if (hiddenVideoRef.current) {
-        cameraManager.startCamera(hiddenVideoRef.current).then((started) => {
-          if (started) {
-            if (loadedSettings.inputMode === 'head') {
-              headTracker.start();
-            } else {
-              eyeTracker.start();
+      const tryStartCamera = () => {
+        if (hiddenVideoRef.current && cameraManager && !cameraManager.getIsRunning()) {
+          cameraManager.startCamera(hiddenVideoRef.current).then((started) => {
+            if (started) {
+              if (loadedSettings.inputMode === 'head') {
+                headTracker.start();
+              } else {
+                eyeTracker.start();
+              }
             }
-          }
-        });
-      }
+          }).catch((err) => {
+            console.warn('Auto start camera pending user gesture', err);
+          });
+        }
+      };
+
+      tryStartCamera();
+
+      // Fallback listener for browsers requiring user gesture for camera/video playback
+      window.addEventListener('pointerdown', tryStartCamera, { once: true });
+      window.addEventListener('keydown', tryStartCamera, { once: true });
     });
 
     return () => {
@@ -382,19 +392,21 @@ export const App: React.FC = () => {
         muted
       />
 
-      {/* Persistent Accessible Header Bar with Live Clock & SOS */}
-      <CameraStatus
-        diagnosticInfo={diagnosticInfo}
-        mode={settings.inputMode}
-        isResting={isResting}
-        isPaused={isPaused}
-        onToggleRest={handleToggleRest}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onTriggerSos={() => setIsSosOpen(true)}
-        showBackHome={currentPage !== 'home'}
-        onNavigateHome={() => setCurrentPage('home')}
-        isCalibrated={!!calibrationResult?.passed}
-      />
+      {/* Persistent Accessible Header Bar with Live Clock & SOS (shown on child pages) */}
+      {currentPage !== 'home' && (
+        <CameraStatus
+          diagnosticInfo={diagnosticInfo}
+          mode={settings.inputMode}
+          isResting={isResting}
+          isPaused={isPaused}
+          onToggleRest={handleToggleRest}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onTriggerSos={() => setIsSosOpen(true)}
+          showBackHome={true}
+          onNavigateHome={() => setCurrentPage('home')}
+          isCalibrated={!!calibrationResult?.passed}
+        />
+      )}
 
       {/* Active Screen Rendering */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -454,6 +466,8 @@ export const App: React.FC = () => {
             }}
             onOpenSettings={() => setIsSettingsOpen(true)}
             onToggleRest={handleToggleRest}
+            diagnosticInfo={diagnosticInfo}
+            isCalibrated={!!calibrationResult?.passed}
           />
         )}
 

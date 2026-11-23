@@ -109,29 +109,39 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 20px',
-        backgroundColor: '#FFFFFF',
-        borderBottom: '1px solid var(--border)',
-        height: '56px',
-        minHeight: '56px',
+        padding: '0 24px',
+        backgroundColor: 'rgba(8, 20, 32, 0.92)',
+        backdropFilter: 'blur(16px)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+        height: '58px',
+        minHeight: '58px',
         gap: '12px',
         zIndex: 100,
         position: 'relative',
         flexShrink: 0,
+        color: '#FFFFFF',
       }}
     >
       {/* LEFT: Brand + optional back-home */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         {showBackHome && onNavigateHome && (
           <DwellButton
             id="nav-back-home"
             onClick={onNavigateHome}
             size="normal"
-            variant="sage"
+            variant="primary"
             ariaLabel="Return to Home screen"
-            style={{ minHeight: '40px', padding: '6px 14px', fontSize: '0.9rem' }}
+            style={{
+              minHeight: '38px',
+              padding: '6px 14px',
+              fontSize: '0.88rem',
+              backgroundColor: 'rgba(0, 163, 255, 0.2)',
+              border: '1px solid #00C8FF',
+              color: '#FFFFFF',
+              boxShadow: '0 0 12px rgba(0, 200, 255, 0.35)',
+            }}
           >
-            <Home size={18} />
+            <Home size={17} />
             <span>Home</span>
           </DwellButton>
         )}
@@ -142,34 +152,35 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
           size="normal"
           variant="ghost"
           ariaLabel="Cancel current dwell action"
-          style={{ minHeight: '40px', padding: '6px 10px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}
+          style={{ minHeight: '38px', padding: '6px 12px', fontSize: '0.85rem', color: '#94A3B8' }}
         >
           <XCircle size={16} />
           <span>Cancel</span>
         </DwellButton>
 
         {/* Brand */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
             style={{
               width: '32px',
               height: '32px',
               borderRadius: '8px',
-              backgroundColor: 'var(--primary)',
+              backgroundColor: 'rgba(0, 200, 255, 0.15)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#FFFFFF',
+              color: '#00C8FF',
+              border: '1px solid rgba(0, 200, 255, 0.3)',
               flexShrink: 0,
             }}
           >
             {mode === 'eye' ? <Eye size={18} /> : <Compass size={18} />}
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)', lineHeight: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#FFFFFF', lineHeight: 1 }}>
               EyeControl
             </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.3px' }}>
+            <div style={{ fontSize: '0.72rem', color: '#8FAEC5', fontWeight: 500, letterSpacing: '0.3px' }}>
               Look • Select • Speak
             </div>
           </div>
@@ -190,7 +201,7 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
             backgroundColor: `${statusDot}10`,
             fontSize: '0.85rem',
             fontWeight: 700,
-            color: '#0F172A',
+            color: '#FFFFFF',
             whiteSpace: 'nowrap',
           }}
           aria-live="polite"
@@ -202,6 +213,7 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
               borderRadius: '50%',
               backgroundColor: statusDot,
               flexShrink: 0,
+              boxShadow: `0 0 8px ${statusDot}`,
             }}
           />
           <span>{statusText}</span>
@@ -212,8 +224,8 @@ export const CameraStatus: React.FC<CameraStatusProps> = ({
         <div
           style={{
             fontSize: '0.85rem',
-            fontWeight: 600,
-            color: 'var(--text-secondary)',
+            fontWeight: 500,
+            color: '#94A3B8',
             whiteSpace: 'nowrap',
           }}
         >

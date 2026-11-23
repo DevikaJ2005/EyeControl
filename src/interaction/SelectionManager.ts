@@ -268,17 +268,17 @@ export class SelectionManager {
           const dx = Math.max(rect.left - point.x, 0, point.x - rect.right);
           const dy = Math.max(rect.top - point.y, 0, point.y - rect.bottom);
           const edgeDist = Math.sqrt(dx * dx + dy * dy);
-          if (edgeDist <= 160) {
+          if (edgeDist <= this.exitTolerancePx) {
             return this.lastHoveredTargetId;
           }
         }
       }
     }
 
-    // Otherwise, search for the closest target on screen
+    // Otherwise, search for the closest target within enter tolerance
     let closestId: string | null = null;
     let closestScore = Infinity;
-    const MAX_EDGE_DISTANCE = 320; // 320px reach
+    const MAX_EDGE_DISTANCE = this.enterTolerancePx;
 
     for (const [id, target] of this.targets.entries()) {
       if (target.disabled) continue;
