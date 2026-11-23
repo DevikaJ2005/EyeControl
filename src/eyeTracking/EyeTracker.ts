@@ -30,6 +30,8 @@ export class EyeTracker {
   private neutralPose: HeadPose | null = null;
   private autoOffsetX: number = 0;
   private autoOffsetY: number = 0;
+  private invertX: boolean = false;
+  private invertY: boolean = false;
 
   constructor(gazeModel: GazeModel, configMode: TrackingConfigMode = 'adaptive_dual_view') {
     this.landmarkerService = FaceLandmarkerService.getInstance();
@@ -79,6 +81,14 @@ export class EyeTracker {
 
   public setNeutralPose(pose: HeadPose | null): void {
     this.neutralPose = pose;
+  }
+
+  public setInvertX(invert: boolean): void {
+    this.invertX = invert;
+  }
+
+  public setInvertY(invert: boolean): void {
+    this.invertY = invert;
   }
 
   public start(): void {
@@ -200,16 +210,21 @@ export class EyeTracker {
       const centeredIrisX = irisDevX - this.autoOffsetX;
       const centeredIrisY = irisDevY - this.autoOffsetY;
 
-      // Coordinate mapping to screen viewport [0..1] where:
-      // - Looking Screen Right (camera left): irisDevX < 0, headPose.yaw < 0 -> moves screen-right (> 0.5)
-      // - Looking Screen Left (camera right): irisDevX > 0, headPose.yaw > 0 -> moves screen-left (< 0.5)
-      // - Looking Screen Top: irisDevY < 0, headPose.pitch < 0 -> moves screen-top (< 0.5)
-      // - Looking Screen Bottom: irisDevY > 0, headPose.pitch > 0 -> moves screen-bottom (> 0.5)
-      const eyeGazeContributionX = -this.applySCurve(centeredIrisX, 3.8);
-      const headYawContributionX = -this.applySCurve(headPose.yaw, 1.6);
+      // Coordinate mapping to screen viewport [0..1]:
+      // Natural direct mapping:
+      // - Looking Screen Right -> moves screen-right (> 0.5)
+      // - Looking Screen Left -> moves screen-left (< 0.5)
+      // - Looking Screen Top -> moves screen-top (< 0.5)
+      // - Looking Screen Bottom -> moves screen-bottom (> 0.5)
+      const rawEyeX = this.applySCurve(centeredIrisX, 3.8);
+      const rawHeadX = this.applySCurve(headPose.yaw, 1.6);
+      const eyeGazeContributionX = this.invertX ? -rawEyeX : rawEyeX;
+      const headYawContributionX = this.invertX ? -rawHeadX : rawHeadX;
 
-      const eyeGazeContributionY = this.applySCurve(centeredIrisY, 4.2);
-      const headPitchContributionY = this.applySCurve(headPose.pitch, 1.8);
+      const rawEyeY = this.applySCurve(centeredIrisY, 4.2);
+      const rawHeadY = this.applySCurve(headPose.pitch, 1.8);
+      const eyeGazeContributionY = this.invertY ? -rawEyeY : rawEyeY;
+      const headPitchContributionY = this.invertY ? -rawHeadY : rawHeadY;
 
       const combinedX = 0.5 + eyeGazeContributionX + headYawContributionX;
       const combinedY = 0.5 + eyeGazeContributionY + headPitchContributionY;

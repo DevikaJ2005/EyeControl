@@ -20,6 +20,8 @@ export const DEFAULT_SETTINGS: UserAccessibilitySettings = {
   emergencyContactPhone: '+1-555-0199',
   reducedMotion: false,
   soundFeedback: true,
+  invertGazeX: false,
+  invertGazeY: false,
 };
 
 export class AccessibilityManager {

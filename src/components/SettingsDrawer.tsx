@@ -114,6 +114,19 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
               <span>Head Movement</span>
             </DwellButton>
           </div>
+
+          {/* Gaze Direction Alignment */}
+          <div style={{ marginTop: '4px' }}>
+            <DwellButton
+              id="setting-toggle-invert-x"
+              onClick={() => onUpdateSettings({ invertGazeX: !settings.invertGazeX })}
+              variant={settings.invertGazeX ? 'primary' : 'surface'}
+              ariaLabel="Invert Horizontal Tracking Direction"
+              style={{ width: '100%', minHeight: '44px', fontSize: '0.9rem' }}
+            >
+              <span>{settings.invertGazeX ? '⇄ Horizontal Inverted' : '⇄ Horizontal Normal'}</span>
+            </DwellButton>
+          </div>
         </section>
 
         {/* 2. Recalibration */}

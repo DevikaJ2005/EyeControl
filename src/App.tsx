@@ -272,6 +272,8 @@ export const App: React.FC = () => {
       selectionManager.getDwellEngine().setDwellDuration(loadedSettings.dwellDurationMs);
       selectionManager.setSoundFeedback(loadedSettings.soundFeedback);
       headTracker.setSensitivity(loadedSettings.headSensitivity);
+      eyeTracker.setInvertX(!!loadedSettings.invertGazeX);
+      eyeTracker.setInvertY(!!loadedSettings.invertGazeY);
 
       // Initialize FaceLandmarker
       FaceLandmarkerService.getInstance().initialize();
@@ -349,6 +351,12 @@ export const App: React.FC = () => {
       }
       if (updates.headSensitivity && headTrackerRef.current) {
         headTrackerRef.current.setSensitivity(updates.headSensitivity);
+      }
+      if (updates.invertGazeX !== undefined && eyeTrackerRef.current) {
+        eyeTrackerRef.current.setInvertX(updates.invertGazeX);
+      }
+      if (updates.invertGazeY !== undefined && eyeTrackerRef.current) {
+        eyeTrackerRef.current.setInvertY(updates.invertGazeY);
       }
       return next;
     });

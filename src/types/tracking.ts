@@ -302,4 +302,6 @@ export interface UserAccessibilitySettings {
   reducedMotion: boolean;
   soundFeedback: boolean;
   soundFeedbackEnabled?: boolean;
+  invertGazeX?: boolean;
+  invertGazeY?: boolean;
 }
