@@ -196,6 +196,13 @@ export class AdaptiveEyeRegionTracker {
     const leftEyeValid = leftOpenness >= 0.15 && leftIris.x >= 0 && leftIris.x <= 1;
     const rightEyeValid = rightOpenness >= 0.15 && rightIris.x >= 0 && rightIris.x <= 1;
 
+    // Full 16-point anatomical eyelid contour landmarks from MediaPipe FaceMesh
+    const leftContourIndices = [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249];
+    const leftEyelidContour: Point2D[] = leftContourIndices.map(i => ({ x: landmarks[i].x, y: landmarks[i].y }));
+
+    const rightContourIndices = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7];
+    const rightEyelidContour: Point2D[] = rightContourIndices.map(i => ({ x: landmarks[i].x, y: landmarks[i].y }));
+
     this.lastLeftROI = {
       box: this.smoothedLeftBox,
       isDetected: true,
@@ -206,6 +213,7 @@ export class AdaptiveEyeRegionTracker {
       outerCorner: { x: leftOuter.x, y: leftOuter.y },
       upperLid: { x: leftUpper.x, y: leftUpper.y },
       lowerLid: { x: leftLower.x, y: leftLower.y },
+      eyelidContour: leftEyelidContour,
     };
 
     this.lastRightROI = {
@@ -218,6 +226,7 @@ export class AdaptiveEyeRegionTracker {
       outerCorner: { x: rightOuter.x, y: rightOuter.y },
       upperLid: { x: rightUpper.x, y: rightUpper.y },
       lowerLid: { x: rightLower.x, y: rightLower.y },
+      eyelidContour: rightEyelidContour,
     };
 
     this.isDualEyeReliable = leftEyeValid && rightEyeValid;
@@ -405,13 +414,24 @@ export class AdaptiveEyeRegionTracker {
       const upperPt = this.mapToCrop(roi.upperLid, roi.box, w, h);
       const lowerPt = this.mapToCrop(roi.lowerLid, roi.box, w, h);
 
-      // Eyelid curvature line
+      // 2. Full anatomical 16-point eyelid curvature line
       ctx.strokeStyle = '#DCE7DE';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.moveTo(outerPt.x, outerPt.y);
-      ctx.quadraticCurveTo(upperPt.x, upperPt.y, innerPt.x, innerPt.y);
-      ctx.quadraticCurveTo(lowerPt.x, lowerPt.y, outerPt.x, outerPt.y);
+
+      if (roi.eyelidContour && roi.eyelidContour.length > 0) {
+        const p0 = this.mapToCrop(roi.eyelidContour[0], roi.box, w, h);
+        ctx.moveTo(p0.x, p0.y);
+        for (let i = 1; i < roi.eyelidContour.length; i++) {
+          const pt = this.mapToCrop(roi.eyelidContour[i], roi.box, w, h);
+          ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.closePath();
+      } else {
+        ctx.moveTo(outerPt.x, outerPt.y);
+        ctx.quadraticCurveTo(upperPt.x, upperPt.y, innerPt.x, innerPt.y);
+        ctx.quadraticCurveTo(lowerPt.x, lowerPt.y, outerPt.x, outerPt.y);
+      }
       ctx.stroke();
 
       // Corner markers

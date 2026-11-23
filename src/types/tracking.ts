@@ -47,6 +47,7 @@ export interface EyeRegionROI {
   outerCorner: Point2D;
   upperLid: Point2D;
   lowerLid: Point2D;
+  eyelidContour?: Point2D[]; // Full anatomical 16-point eyelid boundary
 }
 
 export interface TrackingPerformanceTelemetry {

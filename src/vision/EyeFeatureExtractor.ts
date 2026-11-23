@@ -77,7 +77,8 @@ export class EyeFeatureExtractor {
     // Both eyes centered at (0.5, 0.5) when looking directly at camera
     // Left eye (person's anatomical left, camera right)
     const leftCenterX = (leftInner.x + leftOuter.x) / 2;
-    const leftCenterY = (leftUpper.y + leftLower.y) / 2;
+    // Anatomical vertical center: resting pupil sits naturally at ~42% from upper lid to lower lid
+    const leftCenterY = leftUpper.y * 0.58 + leftLower.y * 0.42;
     const leftSpanX = Math.abs(leftOuter.x - leftInner.x);
     const leftSpanY = Math.abs(leftLower.y - leftUpper.y);
     const leftNormX = leftSpanX > 1e-5 ? 0.5 + (leftIris.x - leftCenterX) / leftSpanX : 0.5;
@@ -85,7 +86,8 @@ export class EyeFeatureExtractor {
 
     // Right eye (person's anatomical right, camera left)
     const rightCenterX = (rightInner.x + rightOuter.x) / 2;
-    const rightCenterY = (rightUpper.y + rightLower.y) / 2;
+    // Anatomical vertical center: resting pupil sits naturally at ~42% from upper lid to lower lid
+    const rightCenterY = rightUpper.y * 0.58 + rightLower.y * 0.42;
     const rightSpanX = Math.abs(rightInner.x - rightOuter.x);
     const rightSpanY = Math.abs(rightLower.y - rightUpper.y);
     const rightNormX = rightSpanX > 1e-5 ? 0.5 + (rightIris.x - rightCenterX) / rightSpanX : 0.5;
