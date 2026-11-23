@@ -74,17 +74,22 @@ export class EyeFeatureExtractor {
     const rightOpenness = rightWidth > 1e-5 ? rightHeight / rightWidth : 0;
 
     // Normalized iris position within eye frame [0..1]
-    // Left eye (viewer's left / camera right)
-    const leftSpanX = leftInner.x - leftOuter.x;
-    const leftSpanY = leftLower.y - leftUpper.y;
-    const leftNormX = Math.abs(leftSpanX) > 1e-5 ? (leftIris.x - leftOuter.x) / leftSpanX : 0.5;
-    const leftNormY = Math.abs(leftSpanY) > 1e-5 ? (leftIris.y - leftUpper.y) / leftSpanY : 0.5;
+    // Both eyes centered at (0.5, 0.5) when looking directly at camera
+    // Left eye (person's anatomical left, camera right)
+    const leftCenterX = (leftInner.x + leftOuter.x) / 2;
+    const leftCenterY = (leftUpper.y + leftLower.y) / 2;
+    const leftSpanX = Math.abs(leftOuter.x - leftInner.x);
+    const leftSpanY = Math.abs(leftLower.y - leftUpper.y);
+    const leftNormX = leftSpanX > 1e-5 ? 0.5 + (leftIris.x - leftCenterX) / leftSpanX : 0.5;
+    const leftNormY = leftSpanY > 1e-5 ? 0.5 + (leftIris.y - leftCenterY) / leftSpanY : 0.5;
 
-    // Right eye
-    const rightSpanX = rightOuter.x - rightInner.x;
-    const rightSpanY = rightLower.y - rightUpper.y;
-    const rightNormX = Math.abs(rightSpanX) > 1e-5 ? (rightIris.x - rightInner.x) / rightSpanX : 0.5;
-    const rightNormY = Math.abs(rightSpanY) > 1e-5 ? (rightIris.y - rightUpper.y) / rightSpanY : 0.5;
+    // Right eye (person's anatomical right, camera left)
+    const rightCenterX = (rightInner.x + rightOuter.x) / 2;
+    const rightCenterY = (rightUpper.y + rightLower.y) / 2;
+    const rightSpanX = Math.abs(rightInner.x - rightOuter.x);
+    const rightSpanY = Math.abs(rightLower.y - rightUpper.y);
+    const rightNormX = rightSpanX > 1e-5 ? 0.5 + (rightIris.x - rightCenterX) / rightSpanX : 0.5;
+    const rightNormY = rightSpanY > 1e-5 ? 0.5 + (rightIris.y - rightCenterY) / rightSpanY : 0.5;
 
     // Inter-pupillary distance normalized by face width
     const faceLeft = landmarks[this.FACE_LEFT];
@@ -281,6 +286,7 @@ export class EyeFeatureExtractor {
       dRoll,             // Compensatory head roll
       fv.leftOpenness,   // Eye state
       fv.rightOpenness,
+      fv.faceScale,      // 12th feature matching PRETRAINED_GAZE_PRIOR
     ];
   }
 }

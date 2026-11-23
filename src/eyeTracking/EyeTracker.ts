@@ -28,6 +28,8 @@ export class EyeTracker {
   private isRunning: boolean = false;
   private lastPrediction: GazePrediction | null = null;
   private neutralPose: HeadPose | null = null;
+  private autoOffsetX: number = 0;
+  private autoOffsetY: number = 0;
 
   constructor(gazeModel: GazeModel, configMode: TrackingConfigMode = 'adaptive_dual_view') {
     this.landmarkerService = FaceLandmarkerService.getInstance();
@@ -36,6 +38,18 @@ export class EyeTracker {
     this.adaptiveTracker = new AdaptiveEyeRegionTracker(configMode);
     // 30 Hz, minCutoff: 0.25 Hz (rock-steady fixation), beta: 0.008 (snappy saccades), deadband: 3.5px
     this.filter = new OneEuroFilter2D(30, 0.25, 0.008, 1.0, 3.5);
+  }
+
+  /**
+   * Non-linear S-curve transfer function:
+   * Provides micro-saccade deadband at neutral center, then accelerates smoothly towards edges
+   */
+  private applySCurve(val: number, gain: number): number {
+    const deadband = 0.012; // 1.2% deadband around neutral center for fixation reading stability
+    if (Math.abs(val) <= deadband) return 0;
+    const sign = Math.sign(val);
+    const active = Math.abs(val) - deadband;
+    return sign * Math.pow(active * gain, 1.15);
   }
 
   public getAdaptiveTracker(): AdaptiveEyeRegionTracker {
@@ -150,19 +164,59 @@ export class EyeTracker {
 
     if (featureVector && this.gazeModel.getIsTrained()) {
       const pred = this.gazeModel.predict(featureVector);
-      normPos = pred.normalized;
-      rawX = pred.pixel.x;
-      rawY = pred.pixel.y;
-    } else if (eyeLandmarks) {
-      // Uncalibrated geometric gaze approximation combining pupil offset & head orientation
-      // Mirrors camera frame horizontally so looking right moves gaze right
-      const avgIrisX = (eyeLandmarks.leftNormalizedIris.x + eyeLandmarks.rightNormalizedIris.x) / 2;
-      const avgIrisY = (eyeLandmarks.leftOpenness > 0.05 && eyeLandmarks.rightOpenness > 0.05)
-        ? (eyeLandmarks.leftNormalizedIris.y + eyeLandmarks.rightNormalizedIris.y) / 2
-        : 0.5;
+      if (!isNaN(pred.normalized.x) && !isNaN(pred.normalized.y) && !isNaN(pred.pixel.x) && !isNaN(pred.pixel.y)) {
+        normPos = pred.normalized;
+        rawX = pred.pixel.x;
+        rawY = pred.pixel.y;
+      }
+    }
 
-      const normX = Math.max(0.02, Math.min(0.98, 0.5 - headPose.yaw * 1.8 - (avgIrisX - 0.5) * 2.2));
-      const normY = Math.max(0.02, Math.min(0.98, 0.5 + headPose.pitch * 2.0 + (avgIrisY - 0.5) * 2.2));
+    if (!normPos && eyeLandmarks) {
+      // Robust Geometric Gaze + Head Compensation Engine:
+      // High-resolution Differential Iris-in-Canthus Vector
+      const leftWeight = eyeLandmarks.leftOpenness > 0.08 ? 1.0 : 0.0;
+      const rightWeight = eyeLandmarks.rightOpenness > 0.08 ? 1.0 : 0.0;
+      const totalWeight = leftWeight + rightWeight;
+
+      let irisDevX = 0;
+      let irisDevY = 0;
+
+      if (totalWeight > 0) {
+        irisDevX = (
+          (eyeLandmarks.leftNormalizedIris.x - 0.5) * leftWeight +
+          (eyeLandmarks.rightNormalizedIris.x - 0.5) * rightWeight
+        ) / totalWeight;
+
+        irisDevY = (
+          (eyeLandmarks.leftNormalizedIris.y - 0.5) * leftWeight +
+          (eyeLandmarks.rightNormalizedIris.y - 0.5) * rightWeight
+        ) / totalWeight;
+      }
+
+      // Online Auto-Centering drift compensation (slow running average absorbs natural posture shifts)
+      this.autoOffsetX = this.autoOffsetX * 0.996 + irisDevX * 0.004;
+      this.autoOffsetY = this.autoOffsetY * 0.996 + irisDevY * 0.004;
+
+      const centeredIrisX = irisDevX - this.autoOffsetX;
+      const centeredIrisY = irisDevY - this.autoOffsetY;
+
+      // Coordinate mapping to screen viewport [0..1] where:
+      // - Looking Screen Right (camera left): irisDevX < 0, headPose.yaw < 0 -> moves screen-right (> 0.5)
+      // - Looking Screen Left (camera right): irisDevX > 0, headPose.yaw > 0 -> moves screen-left (< 0.5)
+      // - Looking Screen Top: irisDevY < 0, headPose.pitch < 0 -> moves screen-top (< 0.5)
+      // - Looking Screen Bottom: irisDevY > 0, headPose.pitch > 0 -> moves screen-bottom (> 0.5)
+      const eyeGazeContributionX = -this.applySCurve(centeredIrisX, 3.8);
+      const headYawContributionX = -this.applySCurve(headPose.yaw, 1.6);
+
+      const eyeGazeContributionY = this.applySCurve(centeredIrisY, 4.2);
+      const headPitchContributionY = this.applySCurve(headPose.pitch, 1.8);
+
+      const combinedX = 0.5 + eyeGazeContributionX + headYawContributionX;
+      const combinedY = 0.5 + eyeGazeContributionY + headPitchContributionY;
+
+      const normX = Math.max(0.02, Math.min(0.98, combinedX));
+      const normY = Math.max(0.02, Math.min(0.98, combinedY));
+
       normPos = { x: normX, y: normY };
       const pixel = CoordinateManager.normalizedToViewportPixels(normPos, vp);
       rawX = pixel.x;
