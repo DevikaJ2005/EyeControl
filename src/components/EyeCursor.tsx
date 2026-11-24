@@ -86,20 +86,20 @@ export const EyeCursor: React.FC<EyeCursorProps> = ({
             height: '36px',
             borderRadius: '50%',
             border: isDwelling
-              ? '2.5px solid #00C8FF'
-              : '2px solid rgba(0, 200, 255, 0.65)',
+              ? '3px solid #FFFFFF'
+              : '2px solid rgba(255, 255, 255, 0.9)',
             backgroundColor: isDwelling
-              ? 'rgba(0, 200, 255, 0.2)'
-              : 'rgba(0, 200, 255, 0.08)',
+              ? 'rgba(255, 255, 255, 0.25)'
+              : 'rgba(255, 255, 255, 0.1)',
             boxShadow: isDwelling
-              ? '0 0 20px rgba(0, 200, 255, 0.85)'
-              : '0 0 8px rgba(0, 200, 255, 0.35)',
+              ? '0 0 20px rgba(255, 255, 255, 0.95)'
+              : '0 0 10px rgba(255, 255, 255, 0.5)',
             transform: isDwelling ? 'scale(1.2)' : 'scale(1.0)',
             transition: 'all 100ms ease-out',
           }}
         />
 
-        {/* Circular SVG Blue Gaze Progress Ring */}
+        {/* Circular SVG White Gaze Progress Ring */}
         {dwellProgress > 0 && (
           <svg
             width="42"
@@ -116,13 +116,13 @@ export const EyeCursor: React.FC<EyeCursorProps> = ({
               cy="21"
               r="18"
               fill="none"
-              stroke="#00C8FF"
+              stroke="#FFFFFF"
               strokeWidth="4"
               strokeDasharray="113.1"
               strokeDashoffset={113.1 * (1 - dwellProgress)}
               strokeLinecap="round"
               style={{
-                filter: 'drop-shadow(0 0 6px rgba(0, 200, 255, 0.85))',
+                filter: 'drop-shadow(0 0 8px rgba(255, 255, 255, 0.95))',
               }}
             />
           </svg>
@@ -134,8 +134,8 @@ export const EyeCursor: React.FC<EyeCursorProps> = ({
             width: isDwelling ? '10px' : '8px',
             height: isDwelling ? '10px' : '8px',
             borderRadius: '50%',
-            backgroundColor: '#00C8FF',
-            boxShadow: '0 0 10px #00C8FF',
+            backgroundColor: '#FFFFFF',
+            boxShadow: '0 0 10px #FFFFFF',
             transition: 'all 80ms ease-out',
           }}
         />
