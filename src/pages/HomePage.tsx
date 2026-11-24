@@ -17,6 +17,7 @@ import { CameraDiagnosticInfo } from '../types/tracking';
 import { openAppWindow } from '../utils/windowLauncher';
 import { SelectionManager } from '../interaction/SelectionManager';
 import { DwellProgressUpdate } from '../interaction/DwellEngine';
+import { HomePageGlassmorphic } from './HomePageGlassmorphic';
 
 interface HomePageProps {
   onNavigate: (page: 'home' | 'speak' | 'youtube' | 'news' | 'explore' | 'help' | 'settings' | 'calibration') => void;
@@ -41,7 +42,18 @@ export const HomePage: React.FC<HomePageProps> = ({
   onOpenSettings,
   onToggleRest,
   diagnosticInfo,
+  isCalibrated = false,
 }) => {
+  const [themeMode, setThemeMode] = useState<'blocks' | 'glassmorphic'>(() => {
+    return (localStorage.getItem('eyecontrol_theme') as 'blocks' | 'glassmorphic') || 'blocks';
+  });
+
+  const toggleTheme = () => {
+    const next = themeMode === 'blocks' ? 'glassmorphic' : 'blocks';
+    setThemeMode(next);
+    localStorage.setItem('eyecontrol_theme', next);
+  };
+
   const [activeTileId, setActiveTileId] = useState<string>('block-1');
   const [dwellProgress, setDwellProgress] = useState<number>(0);
 
@@ -69,12 +81,26 @@ export const HomePage: React.FC<HomePageProps> = ({
         case '4': onNavigate('help'); setActiveTileId('block-4'); break;
         case '5': onOpenSettings ? onOpenSettings() : onNavigate('settings'); setActiveTileId('block-5'); break;
         case '6': onNavigate('calibration'); setActiveTileId('block-6'); break;
+        case 't': case 'T': toggleTheme(); break;
         case 'r': case 'R': onToggleRest?.(); break;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onNavigate, onOpenSettings, onToggleRest]);
+  }, [onNavigate, onOpenSettings, onToggleRest, themeMode]);
+
+  if (themeMode === 'glassmorphic') {
+    return (
+      <HomePageGlassmorphic
+        onNavigate={onNavigate}
+        onOpenSettings={onOpenSettings}
+        onToggleRest={onToggleRest}
+        onToggleTheme={toggleTheme}
+        diagnosticInfo={diagnosticInfo}
+        isCalibrated={isCalibrated}
+      />
+    );
+  }
 
   const handleOpenYouTube = () => {
     // Open the actual youtube.com website in Google Chrome with the extension active to control YouTube
@@ -283,6 +309,31 @@ export const HomePage: React.FC<HomePageProps> = ({
               Camera on
             </span>
           </div>
+
+          {/* Switch to Glassmorphic Dashboard Button */}
+          <DwellButton
+            id="home-btn-switch-glass"
+            onClick={toggleTheme}
+            variant="ghost"
+            size="normal"
+            ariaLabel="Switch to Glassmorphic Dashboard Theme"
+            style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              borderRadius: '9999px',
+              padding: '6px 16px',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '0.88rem',
+              fontWeight: 600,
+              minHeight: '38px',
+              cursor: 'pointer',
+            }}
+          >
+            <span>✨ Glass Dashboard</span>
+          </DwellButton>
 
           {/* Rest Pill Button */}
           <DwellButton
