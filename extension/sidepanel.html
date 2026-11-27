@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>EyeControl Side Panel</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 14px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #0F2537;
+      color: #FFFFFF;
+      height: 100vh;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+      padding-bottom: 10px;
+    }
+    .brand {
+      font-weight: 800;
+      font-size: 16px;
+      color: #0088FF;
+    }
+    .status-badge {
+      font-size: 11px;
+      background: rgba(22, 163, 74, 0.2);
+      border: 1px solid #16A34A;
+      color: #4ADE80;
+      padding: 3px 8px;
+      border-radius: 99px;
+      font-weight: 700;
+    }
+    .action-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #FFFFFF;
+      padding: 12px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+    .action-btn:hover {
+      background: #0088FF;
+      border-color: #0088FF;
+    }
+    .info-card {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #CBD5E1;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+  </style>
+</head>
+<body>
+  <div class="panel-header">
+    <span class="brand">EyeControl Companion</span>
+    <span class="status-badge" id="side-status">Side Panel Active</span>
+  </div>
+
+  <div class="info-card">
+    <strong>Gaze Controller is active.</strong> Move your eyes or pointer on the webpage. Interactive links and video thumbnails will highlight with a <strong>blue ring</strong>. Hold gaze for 0.9s to select.
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px; margin-top: auto;">
+    <a href="http://localhost:5173" target="_blank" class="action-btn" style="background: #0088FF; border: none;">
+      Open EyeControl Tracker
+    </a>
+    <button id="btn-side-autoscroll" class="action-btn">
+      Toggle Auto-Scroll
+    </button>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

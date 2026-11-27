@@ -1,0 +1,374 @@
+/**
+ * EyeControl Content Styles (Manifest V3)
+ * Scoped styles for:
+ * - High-Contrast Blue Gaze Cursor & SVG Dwell Ring (#0088FF)
+ * - Adaptive Gaze Grid (Normal Mode & Debug Overlay)
+ * - Gaze Scrolling Zones (Upper & Lower directional indicators)
+ * - Live Diagnostics HUD Panel
+ * - Floating Accessible Gaze Dock
+ */
+
+/* ========================================================================= */
+/* 1. GAZE CURSOR & SELECTION RING                                           */
+/* ========================================================================= */
+#eyecontrol-cursor-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 2147483647; /* Maximum possible z-index */
+  user-select: none;
+}
+
+.eyecontrol-cursor {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  margin-top: -22px;
+  border-radius: 50%;
+  pointer-events: none;
+  transition: transform 40ms linear, opacity 150ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.eyecontrol-cursor-inner-dot {
+  width: 10px;
+  height: 10px;
+  background-color: #0088FF;
+  border: 2px solid #FFFFFF;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(0, 136, 255, 0.95);
+}
+
+.eyecontrol-cursor-ring-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 44px;
+  height: 44px;
+  transform: rotate(-90deg);
+}
+
+.eyecontrol-cursor-bg-circle {
+  fill: rgba(0, 136, 255, 0.12);
+  stroke: rgba(0, 136, 255, 0.35);
+  stroke-width: 3.5;
+}
+
+.eyecontrol-cursor-progress-circle {
+  fill: none;
+  stroke: #0088FF;
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 5px rgba(0, 136, 255, 0.9));
+  transition: stroke-dashoffset 35ms linear;
+}
+
+/* Magnetic Target Element Highlight */
+.eyecontrol-target-active {
+  outline: 3px solid #0088FF !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 16px rgba(0, 136, 255, 0.5) !important;
+  transition: outline 100ms ease, box-shadow 100ms ease !important;
+}
+
+/* ========================================================================= */
+/* 2. ADAPTIVE GAZE GRID (DEBUG & NORMAL OVERLAYS)                          */
+/* ========================================================================= */
+#eyecontrol-grid-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483640;
+  display: grid;
+  user-select: none;
+}
+
+.eyecontrol-grid-cell {
+  position: relative;
+  box-sizing: border-box;
+  transition: background-color 150ms ease;
+}
+
+/* Debug mode visible grid lines and badges */
+.eyecontrol-grid-debug .eyecontrol-grid-cell {
+  border: 1px dashed rgba(0, 136, 255, 0.28);
+}
+
+.eyecontrol-grid-debug .eyecontrol-grid-cell.is-active-cell {
+  background-color: rgba(0, 136, 255, 0.12);
+  border: 2px solid #0088FF;
+}
+
+.eyecontrol-cell-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background-color: rgba(15, 23, 42, 0.85);
+  color: #0088FF;
+  border: 1px solid rgba(0, 136, 255, 0.4);
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+/* Hierarchical Sub-Grid (Level 2 Refined Grid) */
+.eyecontrol-subgrid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  border: 2.5px solid #16A34A;
+  background-color: rgba(22, 163, 74, 0.08);
+  border-radius: 8px;
+}
+
+.eyecontrol-subgrid-cell {
+  border: 1px dashed rgba(22, 163, 74, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #16A34A;
+  font-weight: 700;
+}
+
+.eyecontrol-subgrid-cell.is-sub-active {
+  background-color: rgba(22, 163, 74, 0.22);
+}
+
+/* ========================================================================= */
+/* 3. GAZE SCROLLING ZONES (UPPER & LOWER)                                  */
+/* ========================================================================= */
+.eyecontrol-scroll-zone {
+  position: fixed;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 2147483641;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 200ms ease, background-color 200ms ease;
+  opacity: 0;
+}
+
+.eyecontrol-scroll-zone.eyecontrol-scroll-zone-up {
+  top: 0;
+  height: 18vh;
+  background: linear-gradient(to bottom, rgba(0, 136, 255, 0.15) 0%, transparent 100%);
+}
+
+.eyecontrol-scroll-zone.eyecontrol-scroll-zone-down {
+  bottom: 0;
+  height: 18vh;
+  background: linear-gradient(to top, rgba(0, 136, 255, 0.15) 0%, transparent 100%);
+}
+
+/* Debug Mode visible zone edges */
+.eyecontrol-grid-debug .eyecontrol-scroll-zone {
+  opacity: 0.7;
+  border-left: 3px solid #0088FF;
+  border-right: 3px solid #0088FF;
+}
+
+.eyecontrol-scroll-zone.is-zone-dwelling {
+  opacity: 1 !important;
+}
+
+.eyecontrol-scroll-zone-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: rgba(15, 23, 42, 0.9);
+  color: #0088FF;
+  border: 1.5px solid #0088FF;
+  padding: 8px 18px;
+  border-radius: 99px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 4px 16px rgba(0, 136, 255, 0.35);
+  animation: eyecontrol-pulse 1.2s infinite alternate;
+}
+
+@keyframes eyecontrol-pulse {
+  from { transform: scale(0.96); opacity: 0.85; }
+  to { transform: scale(1.04); opacity: 1; }
+}
+
+/* ========================================================================= */
+/* 4. LIVE DIAGNOSTICS HUD PANEL (PART 1 SPECIFICATION)                     */
+/* ========================================================================= */
+#eyecontrol-diagnostics-hud {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  width: 310px;
+  background-color: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1.5px solid rgba(0, 136, 255, 0.45);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: #F8FAFC;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  z-index: 2147483645;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  user-select: none;
+  transition: transform 200ms ease, opacity 200ms ease;
+}
+
+#eyecontrol-diagnostics-hud.is-minimized {
+  width: auto;
+  padding: 6px 12px;
+}
+
+#eyecontrol-diagnostics-hud.is-minimized .eyecontrol-hud-body {
+  display: none;
+}
+
+.eyecontrol-hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  font-weight: 800;
+  color: #0088FF;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.eyecontrol-hud-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.eyecontrol-hud-label {
+  color: #94A3B8;
+}
+
+.eyecontrol-hud-val {
+  font-weight: 700;
+  color: #F1F5F9;
+  text-align: right;
+  max-width: 170px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.eyecontrol-hud-val.good { color: #4ADE80; }
+.eyecontrol-hud-val.warn { color: #FBBF24; }
+.eyecontrol-hud-val.bad { color: #F87171; }
+
+/* ========================================================================= */
+/* 5. FLOATING ACCESSIBLE GAZE DOCK                                         */
+/* ========================================================================= */
+#eyecontrol-dock-root {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 2px solid rgba(0, 136, 255, 0.45);
+  border-radius: 16px;
+  padding: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  z-index: 2147483646;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  user-select: none;
+  transition: transform 200ms ease, opacity 200ms ease;
+  width: 260px;
+}
+
+#eyecontrol-dock-root.eyecontrol-dock-collapsed {
+  transform: translateX(calc(100% - 44px));
+  opacity: 0.8;
+}
+
+.eyecontrol-dock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 6px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.eyecontrol-dock-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #0088FF;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.eyecontrol-dock-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.eyecontrol-dock-btn {
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 10px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justifyContent: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 120ms ease;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.eyecontrol-dock-btn:hover,
+.eyecontrol-dock-btn.is-dwelling {
+  background-color: rgba(0, 136, 255, 0.3);
+  border-color: #0088FF;
+  transform: scale(1.02);
+}
+
+.eyecontrol-dock-btn.is-active-btn {
+  background-color: #0088FF;
+  border-color: #0088FF;
+  color: #FFFFFF;
+}
+
+.eyecontrol-dock-btn-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background-color: #0088FF;
+  transition: width 40ms linear;
+  border-radius: 0 0 8px 8px;
+}
