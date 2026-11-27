@@ -14,6 +14,7 @@ An accessible, webcam-based assistive communication website for people with limi
    - Real-time confidence estimation based on face presence, iris geometry, blink detection, and pose stability.
    - Independent validation on held-out target coordinates.
    - Measurable target selection accuracy.
+   - Saved eye calibrations include the neutral baseline and feature version; legacy calibrations require recalibration.
 4. **Accessible Selection Engine**:
    - Dwell selection (adjustable 1.0s – 3.0s, default 1.5s) with circular progress indicators.
    - Accidental selection lockouts, blink suspension, rest mode, and reading mode lockouts.

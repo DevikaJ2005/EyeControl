@@ -44,6 +44,23 @@ export class EyeFeatureExtractor {
   public static readonly NOSE_TIP = 1;
 
   /**
+   * Estimate iris center from the four perimeter landmarks. Their centroid is
+   * less dependent on the model's single center landmark when it becomes noisy.
+   */
+  public static estimateIrisCenter(landmarks: NormalizedLandmark[], centerIndex: number): Point2D {
+    const center = landmarks[centerIndex];
+    const ring = [1, 2, 3, 4].map(offset => landmarks[centerIndex + offset]);
+    if (!center || ring.some(point => !point || !Number.isFinite(point.x) || !Number.isFinite(point.y))) {
+      return center ? { x: center.x, y: center.y } : { x: 0.5, y: 0.5 };
+    }
+
+    return {
+      x: ring.reduce((sum, point) => sum + point.x, 0) / ring.length,
+      y: ring.reduce((sum, point) => sum + point.y, 0) / ring.length,
+    };
+  }
+
+  /**
    * Extract comprehensive eye landmarks from 478 landmarks array
    */
   public static extractEyeLandmarks(landmarks: NormalizedLandmark[]): EyeLandmarks | null {
@@ -51,13 +68,13 @@ export class EyeFeatureExtractor {
       return null;
     }
 
-    const leftIris = landmarks[this.LEFT_IRIS_CENTER];
+    const leftIris = this.estimateIrisCenter(landmarks, this.LEFT_IRIS_CENTER);
     const leftOuter = landmarks[this.LEFT_OUTER_CORNER];
     const leftInner = landmarks[this.LEFT_INNER_CORNER];
     const leftUpper = landmarks[this.LEFT_UPPER_LID];
     const leftLower = landmarks[this.LEFT_LOWER_LID];
 
-    const rightIris = landmarks[this.RIGHT_IRIS_CENTER];
+    const rightIris = this.estimateIrisCenter(landmarks, this.RIGHT_IRIS_CENTER);
     const rightInner = landmarks[this.RIGHT_INNER_CORNER];
     const rightOuter = landmarks[this.RIGHT_OUTER_CORNER];
     const rightUpper = landmarks[this.RIGHT_UPPER_LID];
@@ -202,8 +219,8 @@ export class EyeFeatureExtractor {
     const faceBox = this.getFaceBoundingBox(landmarks) || { x: 0.2, y: 0.2, width: 0.6, height: 0.6 };
     const nose = landmarks[this.NOSE_TIP] || { x: 0.5, y: 0.5 };
 
-    const leftIris = landmarks[this.LEFT_IRIS_CENTER];
-    const rightIris = landmarks[this.RIGHT_IRIS_CENTER];
+    const leftIris = this.estimateIrisCenter(landmarks, this.LEFT_IRIS_CENTER);
+    const rightIris = this.estimateIrisCenter(landmarks, this.RIGHT_IRIS_CENTER);
 
     // Left eye box
     const leftOuter = landmarks[this.LEFT_OUTER_CORNER];
@@ -286,9 +303,6 @@ export class EyeFeatureExtractor {
       dYaw,              // Compensatory head yaw
       dPitch,            // Compensatory head pitch
       dRoll,             // Compensatory head roll
-      fv.leftOpenness,   // Eye state
-      fv.rightOpenness,
-      fv.faceScale,      // 12th feature matching PRETRAINED_GAZE_PRIOR
     ];
   }
 }

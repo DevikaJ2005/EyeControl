@@ -12,8 +12,9 @@ import { CalibrationPoints } from '../calibration/CalibrationPoints';
 import { CalibrationValidator } from '../calibration/CalibrationValidator';
 import { CoordinateManager } from '../calibration/CoordinateManager';
 import { GazeModel } from '../eyeTracking/GazeModel';
+import { applyGazeInversion } from '../eyeTracking/EyeTracker';
 import { AdaptiveEyeRegionTracker } from '../vision/AdaptiveEyeRegionTracker';
-import { NormalizedLandmark, CalibrationSample, EyeFeatureVector, CentralBaselineData, TrackingConfigMode } from '../types/tracking';
+import { NormalizedLandmark, CalibrationResult, CalibrationSample, EyeFeatureVector, CentralBaselineData, TrackingConfigMode } from '../types/tracking';
 
 describe('RidgeRegression Unit Tests', () => {
   it('accurately fits a known linear relationship with L2 regularization', () => {
@@ -325,11 +326,11 @@ describe('Calibration & Validation Engine Unit Tests', () => {
     const grid = CalibrationPoints.get9PointGrid(1920, 1080);
 
     const baseline: CentralBaselineData = {
-      neutralYaw: 0,
-      neutralPitch: 0,
-      neutralRoll: 0,
-      neutralLeftIris: { x: 0.5, y: 0.5 },
-      neutralRightIris: { x: 0.5, y: 0.5 },
+      neutralYaw: 0.03,
+      neutralPitch: -0.02,
+      neutralRoll: 0.01,
+      neutralLeftIris: { x: 0.54, y: 0.46 },
+      neutralRightIris: { x: 0.53, y: 0.47 },
       neutralFaceCenter: { x: 0.5, y: 0.5 },
       collectedAt: 1000,
     };
@@ -362,6 +363,14 @@ describe('Calibration & Validation Engine Unit Tests', () => {
         });
       }
     }
+
+    const probeFeatures = trainSamples[0].rawFeatureVector;
+    expect(EyeFeatureExtractor.toNumericArray({
+      ...probeFeatures,
+      leftOpenness: probeFeatures.leftOpenness * 0.7,
+      rightOpenness: probeFeatures.rightOpenness * 0.7,
+      faceScale: probeFeatures.faceScale * 1.2,
+    }, baseline)).toEqual(EyeFeatureExtractor.toNumericArray(probeFeatures, baseline));
 
     // Held-out validation samples (5 targets)
     const valSamples: CalibrationSample[] = [];
@@ -398,10 +407,77 @@ describe('Calibration & Validation Engine Unit Tests', () => {
     expect(result.r2X).toBeGreaterThan(0.9);
     expect(result.r2Y).toBeGreaterThan(0.9);
     expect(result.modelType).toBeDefined();
+    expect(result.featureVersion).toBe(2);
+
+    const restoredModel = new GazeModel();
+    expect(restoredModel.deserialize(result)).toBe(true);
+    expect(restoredModel.getCentralBaseline()).toEqual(baseline);
+
+    const probe = trainSamples[0].rawFeatureVector;
+    expect(restoredModel.predict(probe).normalized.x).toBeCloseTo(model.predict(probe).normalized.x, 10);
+    expect(restoredModel.predict(probe).normalized.y).toBeCloseTo(model.predict(probe).normalized.y, 10);
+
+    const legacyCalibration: CalibrationResult = { ...result };
+    delete (legacyCalibration as Partial<CalibrationResult>).centralBaseline;
+
+    const legacyModel = new GazeModel();
+    expect(legacyModel.deserialize(legacyCalibration)).toBe(false);
+    expect(legacyModel.getIsTrained()).toBe(false);
+
+    const outdatedModel = new GazeModel();
+    expect(outdatedModel.deserialize({ ...result, featureVersion: 1 })).toBe(false);
+    expect(outdatedModel.getIsTrained()).toBe(false);
+  });
+
+  it('selects a quadratic model when gaze features have a nonlinear mapping', () => {
+    const model = new GazeModel();
+    const grid = CalibrationPoints.get9PointGrid(1920, 1080);
+    const samples: CalibrationSample[] = grid.trainTargets.map((target) => {
+      const dx = target.normalizedX - 0.5;
+      const dy = target.normalizedY - 0.5;
+      const rawFeatureVector: EyeFeatureVector = {
+        leftIrisX: 0.5 + dx + 1.5 * dx * dx,
+        leftIrisY: 0.5 + dy + 1.5 * dy * dy,
+        rightIrisX: 0.5 + dx + 1.5 * dx * dx,
+        rightIrisY: 0.5 + dy + 1.5 * dy * dy,
+        leftOpenness: 0.35,
+        rightOpenness: 0.35,
+        headYaw: 0,
+        headPitch: 0,
+        headRoll: 0,
+        faceCenterX: 0.5,
+        faceCenterY: 0.5,
+        faceScale: 0.3,
+        timestamp: 1000,
+      };
+
+      return {
+        target,
+        features: EyeFeatureExtractor.toNumericArray(rawFeatureVector),
+        rawFeatureVector,
+        timestamp: rawFeatureVector.timestamp,
+      };
+    });
+
+    const result = model.train(samples, [], 1920, 1080);
+    expect(result.modelDegree).toBe(2);
+
+    const restoredModel = new GazeModel();
+    expect(restoredModel.deserialize(result)).toBe(true);
+    expect(restoredModel.predict(samples[0].rawFeatureVector).normalized.x)
+      .toBeCloseTo(model.predict(samples[0].rawFeatureVector).normalized.x, 10);
   });
 });
 
 describe('CoordinateManager & Out-of-Bounds Rejection Tests', () => {
+  it('inverts calibrated gaze directions around screen center when requested', () => {
+    expect(applyGazeInversion({ x: 0.2, y: 0.7 }, true, false)).toEqual({ x: 0.8, y: 0.7 });
+    const invertedY = applyGazeInversion({ x: 0.2, y: 0.7 }, false, true);
+    expect(invertedY.x).toBe(0.2);
+    expect(invertedY.y).toBeCloseTo(0.3, 10);
+    expect(applyGazeInversion({ x: 0.5, y: 0.5 }, true, true)).toEqual({ x: 0.5, y: 0.5 });
+  });
+
   it('correctly maps normalized [0..1] coordinates for 1366x768 viewport', () => {
     const vp = { width: 1366, height: 768 };
     const centerNorm = { x: 0.5, y: 0.5 };
@@ -505,6 +581,10 @@ describe('AdaptiveEyeRegionTracker Unit Tests', () => {
     landmarks[EyeFeatureExtractor.LEFT_UPPER_LID] = { x: 0.40, y: 0.37, z: 0 };
     landmarks[EyeFeatureExtractor.LEFT_LOWER_LID] = { x: 0.40, y: 0.43, z: 0 };
     landmarks[EyeFeatureExtractor.LEFT_IRIS_CENTER] = { x: 0.40, y: 0.40, z: 0 };
+    landmarks[474] = { x: 0.39, y: 0.40, z: 0 };
+    landmarks[475] = { x: 0.41, y: 0.40, z: 0 };
+    landmarks[476] = { x: 0.40, y: 0.39, z: 0 };
+    landmarks[477] = { x: 0.40, y: 0.41, z: 0 };
 
     // RIGHT eye constants (person's anatomical right): placed at x ~ 0.55 to 0.65 in this mock
     landmarks[EyeFeatureExtractor.RIGHT_INNER_CORNER] = { x: 0.55, y: 0.4, z: 0 };
@@ -512,6 +592,10 @@ describe('AdaptiveEyeRegionTracker Unit Tests', () => {
     landmarks[EyeFeatureExtractor.RIGHT_UPPER_LID] = { x: 0.60, y: 0.37, z: 0 };
     landmarks[EyeFeatureExtractor.RIGHT_LOWER_LID] = { x: 0.60, y: 0.43, z: 0 };
     landmarks[EyeFeatureExtractor.RIGHT_IRIS_CENTER] = { x: 0.60, y: 0.40, z: 0 };
+    landmarks[469] = { x: 0.59, y: 0.40, z: 0 };
+    landmarks[470] = { x: 0.61, y: 0.40, z: 0 };
+    landmarks[471] = { x: 0.60, y: 0.39, z: 0 };
+    landmarks[472] = { x: 0.60, y: 0.41, z: 0 };
 
     return landmarks;
   };
@@ -535,6 +619,21 @@ describe('AdaptiveEyeRegionTracker Unit Tests', () => {
     // RIGHT eye landmarks placed at x~0.55–0.65
     expect(state.rightEyeROI!.box.x).toBeLessThan(0.65);
     expect(state.rightEyeROI!.box.x + state.rightEyeROI!.box.width).toBeGreaterThan(0.55);
+  });
+
+  it('uses the iris perimeter centroid when the center landmark is stationary', () => {
+    const landmarks = createMockLandmarks();
+    landmarks[EyeFeatureExtractor.LEFT_IRIS_CENTER] = { x: 0.40, y: 0.40, z: 0 };
+    landmarks[474] = { x: 0.39, y: 0.43, z: 0 };
+    landmarks[475] = { x: 0.41, y: 0.43, z: 0 };
+    landmarks[476] = { x: 0.40, y: 0.42, z: 0 };
+    landmarks[477] = { x: 0.40, y: 0.44, z: 0 };
+
+    const eye = EyeFeatureExtractor.extractEyeLandmarks(landmarks);
+    const diagnostic = EyeFeatureExtractor.getDiagnosticOverlayData(landmarks);
+
+    expect(eye?.leftIrisCenter.y).toBeCloseTo(0.43, 5);
+    expect(diagnostic?.leftIris.y).toBeCloseTo(0.43, 5);
   });
 
   it('adaptively expands ROI context margin when user moves further away from camera', () => {

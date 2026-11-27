@@ -281,9 +281,13 @@ export const App: React.FC = () => {
       // Load saved eye calibration
       CalibrationStorage.loadEyeCalibration().then((savedCalib) => {
         if (savedCalib && savedCalib.passed) {
-          gazeModel.deserialize(savedCalib);
-          setCalibrationResult(savedCalib);
-          TrackingStateManager.getInstance().setHasCalibratedEye(true);
+          if (gazeModel.deserialize(savedCalib)) {
+            setCalibrationResult(savedCalib);
+            TrackingStateManager.getInstance().setHasCalibratedEye(true);
+          } else {
+            setCalibrationResult(null);
+            TrackingStateManager.getInstance().setHasCalibratedEye(false);
+          }
         }
       });
 

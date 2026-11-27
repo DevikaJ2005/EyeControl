@@ -147,7 +147,7 @@ export class AdaptiveEyeRegionTracker {
     const leftInner = landmarks[EyeFeatureExtractor.LEFT_INNER_CORNER];
     const leftUpper = landmarks[EyeFeatureExtractor.LEFT_UPPER_LID];
     const leftLower = landmarks[EyeFeatureExtractor.LEFT_LOWER_LID];
-    const leftIris = landmarks[EyeFeatureExtractor.LEFT_IRIS_CENTER];
+    const leftIris = EyeFeatureExtractor.estimateIrisCenter(landmarks, EyeFeatureExtractor.LEFT_IRIS_CENTER);
 
     const leftRawWidth = Math.abs(leftInner.x - leftOuter.x);
     const leftRawHeight = Math.abs(leftLower.y - leftUpper.y);
@@ -166,7 +166,7 @@ export class AdaptiveEyeRegionTracker {
     const rightInner = landmarks[EyeFeatureExtractor.RIGHT_INNER_CORNER];
     const rightUpper = landmarks[EyeFeatureExtractor.RIGHT_UPPER_LID];
     const rightLower = landmarks[EyeFeatureExtractor.RIGHT_LOWER_LID];
-    const rightIris = landmarks[EyeFeatureExtractor.RIGHT_IRIS_CENTER];
+    const rightIris = EyeFeatureExtractor.estimateIrisCenter(landmarks, EyeFeatureExtractor.RIGHT_IRIS_CENTER);
 
     const rightRawWidth = Math.abs(rightOuter.x - rightInner.x);
     const rightRawHeight = Math.abs(rightLower.y - rightUpper.y);

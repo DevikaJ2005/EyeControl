@@ -236,6 +236,9 @@ export interface CalibrationResult {
   interceptY: number;
   meanFeatures: number[];
   stdFeatures: number[];
+  centralBaseline: CentralBaselineData | null;
+  modelDegree?: number;
+  featureVersion: number;
   r2X: number;
   r2Y: number;
   meanValidationPixelError: number;

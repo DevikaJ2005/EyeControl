@@ -17,6 +17,13 @@ import { CoordinateManager } from '../calibration/CoordinateManager';
 
 export type GazeListener = (prediction: GazePrediction) => void;
 
+export function applyGazeInversion(point: Point2D, invertX: boolean, invertY: boolean): Point2D {
+  return {
+    x: invertX ? 1 - point.x : point.x,
+    y: invertY ? 1 - point.y : point.y,
+  };
+}
+
 export class EyeTracker {
   private landmarkerService: FaceLandmarkerService;
   private gazeModel: GazeModel;
@@ -175,9 +182,10 @@ export class EyeTracker {
     if (featureVector && this.gazeModel.getIsTrained()) {
       const pred = this.gazeModel.predict(featureVector);
       if (!isNaN(pred.normalized.x) && !isNaN(pred.normalized.y) && !isNaN(pred.pixel.x) && !isNaN(pred.pixel.y)) {
-        normPos = pred.normalized;
-        rawX = pred.pixel.x;
-        rawY = pred.pixel.y;
+        normPos = applyGazeInversion(pred.normalized, this.invertX, this.invertY);
+        const pixel = CoordinateManager.normalizedToViewportPixels(normPos, vp);
+        rawX = pixel.x;
+        rawY = pixel.y;
       }
     }
 

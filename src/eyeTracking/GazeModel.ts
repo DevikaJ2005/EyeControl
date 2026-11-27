@@ -17,6 +17,8 @@ interface CandidateConfig {
   degree: number;
 }
 
+const GAZE_FEATURE_VERSION = 2;
+
 export class GazeModel {
   private modelX: RidgeRegression;
   private modelY: RidgeRegression;
@@ -69,6 +71,8 @@ export class GazeModel {
       { name: 'Ridge Balanced (λ=0.01)', lambda: 0.01, degree: 1 },
       { name: 'Ridge Robust (λ=0.1)', lambda: 0.1, degree: 1 },
       { name: 'Ridge Strong (λ=0.5)', lambda: 0.5, degree: 1 },
+      { name: 'Quadratic Ridge (λ=0.1)', lambda: 0.1, degree: 2 },
+      { name: 'Quadratic Ridge (λ=1)', lambda: 1, degree: 2 },
     ];
 
     // Group samples by target ID
@@ -298,6 +302,9 @@ export class GazeModel {
       interceptY: fitResultY.intercept,
       meanFeatures: normalizerX.mean,
       stdFeatures: normalizerX.std,
+      centralBaseline: this.centralBaseline,
+      modelDegree: bestConfig.degree,
+      featureVersion: GAZE_FEATURE_VERSION,
       r2X: fitResultX.r2,
       r2Y: fitResultY.r2,
       meanValidationPixelError: Math.round(meanPixelError),
@@ -354,16 +361,29 @@ export class GazeModel {
 
   public deserialize(data: CalibrationResult): boolean {
     try {
+      if (data.centralBaseline === undefined) {
+        console.warn('Saved gaze calibration has no central baseline; recalibration is required.');
+        this.isTrained = false;
+        return false;
+      }
+      if (data.featureVersion !== GAZE_FEATURE_VERSION) {
+        console.warn('Saved gaze calibration uses outdated features; recalibration is required.');
+        this.isTrained = false;
+        return false;
+      }
+
       this.screenWidth = data.screenResolution.width;
       this.screenHeight = data.screenResolution.height;
+      this.centralBaseline = data.centralBaseline;
 
       const normalizer = {
         mean: data.meanFeatures,
         std: data.stdFeatures,
       };
+      const degree = data.modelDegree ?? 1;
 
-      this.modelX.loadModel(data.weightsX, data.interceptX, normalizer);
-      this.modelY.loadModel(data.weightsY, data.interceptY, normalizer);
+      this.modelX.loadModel(data.weightsX, data.interceptX, normalizer, degree);
+      this.modelY.loadModel(data.weightsY, data.interceptY, normalizer, degree);
 
       this.lastCalibrationResult = data;
       this.isTrained = true;
